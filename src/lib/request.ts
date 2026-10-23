@@ -219,7 +219,7 @@ export function prepareRequest(
       createParam({ name: 'Authorization', value: `Basic ${basicToken(auth.username, auth.password)}` }),
     );
   }
-  // 只合并「Auth 生成的」和「请求自己写的」，不再有任何目录级请求头
+  // Auth 生成的头 + 请求自身头；同名时请求覆盖 Auth。
   const resolvedHeaders = mergeHeaderFields(authHeaders, request.headers.map(resolveHeaderField));
 
   const warnings: string[] = [];

@@ -1,5 +1,5 @@
 import type { ApiRequest, ParamField } from './types';
-import { hasProtocol, joinBaseUrl, mergeHeaderFields } from './request';
+import { hasProtocol, joinBaseUrl } from './request';
 import { resolveTemplate } from './variables';
 
 function shellQuote(value: string): string {
@@ -15,8 +15,6 @@ export interface CurlOptions {
   followRedirects?: boolean;
   /** 当前环境的前置 URL，用于拼接相对路径 */
   baseUrl?: string;
-  /** 从文件夹链继承的默认请求头 */
-  inheritedHeaders?: ParamField[];
 }
 
 export function buildCurl(
@@ -45,11 +43,7 @@ export function buildCurl(
 
   const lines = [`curl -X ${request.method} ${shellQuote(url)}`];
 
-  const inherited = (options.inheritedHeaders ?? []).map((header) => ({
-    ...header,
-    value: resolveTemplate(header.value, variables).value,
-  }));
-  const headers = mergeHeaderFields(inherited, request.headers).map((header) => ({
+  const headers = activeFields(request.headers).map((header) => ({
     name: header.name.trim(),
     value: resolveTemplate(header.value, variables).value,
   }));

@@ -279,7 +279,6 @@ async function copyCurl(): Promise<void> {
     timeoutMs: settings.timeoutMs,
     followRedirects: settings.followRedirects,
     baseUrl: workspace.activeEnvironment?.baseUrl ?? '',
-    inheritedHeaders: workspace.inheritedHeadersFor(props.request.collectionId),
   });
   const ok = await copyText(curl);
   if (ok) toast.success('cURL 已复制');

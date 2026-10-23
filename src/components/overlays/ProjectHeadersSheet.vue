@@ -40,8 +40,7 @@ watch(
   ([isOpen, id]) => {
     if (!isOpen || !id) return;
     const target = workspace.collectionById(id);
-    const draft = cloneWorkspace(target?.auth ?? createRequestAuth('none'));
-    authDraft.value = draft;
+    authDraft.value = cloneWorkspace(target?.auth ?? createRequestAuth('none'));
   },
   { immediate: true },
 );

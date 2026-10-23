@@ -137,6 +137,17 @@ function countRequests(collectionId: string): number {
   return total;
 }
 
+const FOLDER_AUTH_LABELS: Record<string, string> = {
+  apikey: 'API Key',
+  bearer: 'Bearer',
+  basic: 'Basic',
+};
+
+/** 只标记「自己设置了鉴权」的文件夹；继承和 none 都不算 */
+function folderAuthLabel(collection: Collection): string | null {
+  return FOLDER_AUTH_LABELS[collection.auth?.type ?? ''] ?? null;
+}
+
 function folderPath(collectionId: string): string {
   return workspace
     .collectionChain(collectionId)
@@ -360,12 +371,13 @@ const deleteDescription = computed(() => {
                 <Folder v-else class="size-3.5 shrink-0 text-muted-foreground" />
                 <span class="min-w-0 flex-1 truncate text-[13px]">{{ row.collection.name }}</span>
                 <span
-                  v-if="row.collection.headers?.length"
-                  class="inline-flex shrink-0 items-center gap-0.5 rounded-full bg-primary/10 px-1.5 py-0.5 text-micro text-primary"
-                  :title="`继承 ${row.collection.headers.length} 个请求头`"
+                  v-if="folderAuthLabel(row.collection)"
+                  class="inline-flex size-5 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary ring-1 ring-primary/15"
+                  role="img"
+                  :title="`文件夹鉴权：${folderAuthLabel(row.collection)}`"
+                  :aria-label="`已设置文件夹鉴权：${folderAuthLabel(row.collection)}`"
                 >
                   <ShieldCheck class="size-3" />
-                  {{ row.collection.headers.length }}
                 </span>
                 <span class="text-micro text-muted-foreground tabular">
                   {{ countRequests(row.collection.id) }}

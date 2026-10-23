@@ -1,4 +1,4 @@
-//! 首次启动的初始数据：只建一个空环境，不带任何示例项目或请求。
+//! 首次启动的初始数据：只建一个空环境，并把它设为当前环境。
 
 use rusqlite::{Connection, params};
 
@@ -36,6 +36,13 @@ pub fn seed_if_empty(conn: &mut Connection) -> rusqlite::Result<bool> {
             environment.created_at,
             environment.updated_at
         ],
+    )?;
+
+    // 与前端 mock 的初始状态保持一致：默认环境处于激活状态。
+    conn.execute(
+        "INSERT INTO settings (key, value) VALUES ('active_environment', ?1)
+         ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+        params![environment.id],
     )?;
 
     Ok(true)

@@ -1,7 +1,6 @@
 import { computed, ref } from 'vue';
 import { defineStore } from 'pinia';
 import { backend } from '@/lib/backend';
-import { mergeHeaderFields } from '@/lib/request';
 import {
   cloneWorkspace,
   createCollection,
@@ -11,7 +10,6 @@ import {
   type ApiRequest,
   type Collection,
   type Environment,
-  type ParamField,
   type RequestAuth,
   type Workspace,
 } from '@/lib/types';
@@ -75,12 +73,6 @@ export const useWorkspaceStore = defineStore('workspace', () => {
       if (auth && auth.type !== 'inherit' && auth.type !== 'none') return auth;
     }
     return null;
-  }
-
-  /** 沿文件夹链合并出的默认请求头，越靠近请求的覆盖越靠前的 */
-  function inheritedHeadersFor(collectionId: string): ParamField[] {
-    const chain = collectionChain(collectionId);
-    return mergeHeaderFields(...chain.map((item) => item.headers ?? []));
   }
 
   function descendantCollectionIds(id: string): string[] {
@@ -270,7 +262,6 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     collectionChain,
     projectOf,
     inheritedAuthFor,
-    inheritedHeadersFor,
     descendantCollectionIds,
     requestsOf,
     requestById,

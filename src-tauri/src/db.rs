@@ -74,20 +74,17 @@ impl Database {
             return Err("集合 ID 不能为空".to_string());
         }
         let conn = self.connect()?;
-        let headers_json = serde_json::to_string(&collection.headers)
-            .map_err(|err| format!("保存集合失败：请求头序列化失败（{err}）"))?;
         let auth_json = serde_json::to_string(&collection.auth)
             .map_err(|err| format!("保存集合失败：鉴权序列化失败（{err}）"))?;
         conn.execute(
             "INSERT INTO collections
-                (id, parent_id, name, description, headers_json, auth_json, sort_order,
+                (id, parent_id, name, description, auth_json, sort_order,
                  created_at, updated_at)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)
              ON CONFLICT(id) DO UPDATE SET
                 parent_id = excluded.parent_id,
                 name = excluded.name,
                 description = excluded.description,
-                headers_json = excluded.headers_json,
                 auth_json = excluded.auth_json,
                 sort_order = excluded.sort_order,
                 created_at = excluded.created_at,
@@ -97,7 +94,6 @@ impl Database {
                 collection.parent_id,
                 collection.name,
                 collection.description,
-                headers_json,
                 auth_json,
                 collection.sort_order,
                 collection.created_at,
@@ -395,7 +391,6 @@ fn init_schema(conn: &Connection) -> Result<(), String> {
             parent_id TEXT NULL,
             name TEXT NOT NULL,
             description TEXT NOT NULL DEFAULT '',
-            headers_json TEXT NOT NULL DEFAULT '[]',
             auth_json TEXT NOT NULL DEFAULT '{}',
             sort_order INTEGER NOT NULL DEFAULT 0,
             created_at TEXT NOT NULL,
@@ -451,12 +446,6 @@ fn init_schema(conn: &Connection) -> Result<(), String> {
     ensure_column(
         conn,
         "collections",
-        "headers_json",
-        "headers_json TEXT NOT NULL DEFAULT '[]'",
-    )?;
-    ensure_column(
-        conn,
-        "collections",
         "auth_json",
         "auth_json TEXT NOT NULL DEFAULT '{}'",
     )?;
@@ -502,23 +491,18 @@ fn load_collections(conn: &Connection) -> Result<Vec<Collection>, String> {
     let mut stmt = conn
         .prepare(
             "SELECT id, name, description, sort_order, created_at, updated_at,
-                    parent_id, headers_json, auth_json
+                    parent_id, auth_json
              FROM collections ORDER BY sort_order ASC, name ASC",
         )
         .map_err(|err| format!("读取集合失败：{err}"))?;
     let rows = stmt
         .query_map([], |row| {
-            let headers_json: Option<String> = row.get(7)?;
-            let auth_json: Option<String> = row.get(8)?;
+            let auth_json: Option<String> = row.get(7)?;
             Ok(Collection {
                 id: row.get(0)?,
                 parent_id: row.get(6)?,
                 name: row.get(1)?,
                 description: row.get(2)?,
-                headers: headers_json
-                    .as_deref()
-                    .map(parse_json)
-                    .unwrap_or_default(),
                 auth: auth_json
                     .as_deref()
                     .map(parse_json)
@@ -698,27 +682,24 @@ mod tests {
     }
 
     #[test]
-    fn seeds_demo_workspace_once() {
+    fn seeds_empty_workspace_with_one_default_environment() {
         let temp = TempDb::new();
         let workspace = temp.db.load_workspace().unwrap();
-        assert_eq!(workspace.collections.len(), 2);
-        assert_eq!(workspace.requests.len(), 6);
-        assert_eq!(workspace.environments.len(), 2);
-        assert_eq!(workspace.active_environment_id.as_deref(), Some("env-demo"));
-        let request = workspace
-            .requests
-            .iter()
-            .find(|item| item.id == "req-demo-get")
-            .unwrap();
-        assert_eq!(request.params.len(), 5);
-        assert_eq!(request.headers.len(), 2);
-        let order = workspace
-            .requests
-            .iter()
-            .find(|item| item.id == "req-demo-post")
-            .unwrap();
-        assert_eq!(order.body.mode, "json");
-        assert!(order.body.raw.contains("A-1001"));
+        assert!(workspace.collections.is_empty());
+        assert!(workspace.requests.is_empty());
+        assert_eq!(workspace.environments.len(), 1);
+        assert_eq!(workspace.environments[0].id, "env-default");
+        assert_eq!(workspace.environments[0].name, "本地开发");
+        assert!(workspace.environments[0].variables.is_empty());
+        assert_eq!(
+            workspace.active_environment_id.as_deref(),
+            Some("env-default")
+        );
+
+        // 再次加载不会重复写种子
+        let again = temp.db.load_workspace().unwrap();
+        assert_eq!(again.environments.len(), 1);
+        assert!(again.collections.is_empty());
     }
 
     #[test]
@@ -729,7 +710,6 @@ mod tests {
             parent_id: None,
             name: "测试集合".into(),
             description: String::new(),
-            headers: Vec::new(),
             auth: RequestAuth::default(),
             sort_order: 9,
             created_at: "2026-01-01T00:00:00.000Z".into(),

@@ -109,8 +109,6 @@ export interface Collection {
   parentId: string | null;
   name: string;
   description: string;
-  /** 挂在这个文件夹上的默认请求头，子级请求会继承 */
-  headers: ParamField[];
   /** 文件夹级鉴权，子级请求选「继承」时生效 */
   auth: RequestAuth;
   sortOrder: number;
@@ -276,7 +274,6 @@ const collectionSchema = z.object({
   parentId: z.string().nullable().default(null),
   name: z.string(),
   description: z.string().default(''),
-  headers: z.array(paramFieldSchema).default([]),
   auth: requestAuthSchema.default({ type: 'inherit', bearerToken: '', username: '', password: '', keyName: 'Authorization', keyValue: '', keyIn: 'header' }),
   sortOrder: z.number().default(0),
   createdAt: z.string().default(''),
@@ -394,7 +391,6 @@ export function createCollection(
     parentId,
     name,
     description: '',
-    headers: [],
     auth: createRequestAuth('none'),
     sortOrder,
     createdAt: at,

@@ -172,8 +172,6 @@ pub struct Collection {
     pub parent_id: Option<String>,
     pub name: String,
     pub description: String,
-    /// 挂在这个文件夹上的默认请求头，子级请求继承
-    pub headers: Vec<ParamField>,
     /// 文件夹级鉴权，子级请求选「继承」时生效
     pub auth: RequestAuth,
     pub sort_order: i64,
@@ -188,7 +186,6 @@ impl Default for Collection {
             parent_id: None,
             name: String::new(),
             description: String::new(),
-            headers: Vec::new(),
             auth: RequestAuth::default(),
             sort_order: 0,
             created_at: String::new(),
