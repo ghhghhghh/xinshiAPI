@@ -29,7 +29,7 @@ MCP 服务和 Skill 都随安装包分发，不需要 Node、源码仓库或手�
 3. 复制对应工具配置：
    - **Codex**：把 `[mcp_servers.xingshi]` 追加到 `%USERPROFILE%\.codex\config.toml`
    - **Qoder**：把 JSON 合并到 `%USERPROFILE%\.qoder\settings.json` 的 `mcpServers`
-4. 点「安装 Skill 到 Qoder」（其他支持技能目录的工具，复制面板里的 Skill 路径，把整个文件夹放进技能目录）。
+4. 复制面板里的 Skill 路径，把整个 `xingshi-api-import` 文件夹放进 AI 工具的技能目录。
 5. 重启 AI 工具。
 
 配置长这样，`<信使安装目录>` 由面板自动替换成当前电脑的实际位置，不用手填：

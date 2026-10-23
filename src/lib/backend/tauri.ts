@@ -25,7 +25,6 @@ export function createTauriBackend(): Backend {
       invoke<void>('set_active_environment', { id }),
     getWorkspaceRevision: () => invoke<string | null>('get_workspace_revision'),
     getAiSetupInfo: () => invoke<AiSetupInfo>('get_ai_setup_info'),
-    installSkill: () => invoke<string>('install_skill'),
     sendRequest: (requestId: string, spec: HttpRequestSpec) =>
       invoke<HttpResponseData>('send_request', { requestId, spec }),
     cancelRequest: (requestId: string) => invoke<void>('cancel_request', { requestId }),

@@ -4,7 +4,6 @@ import { toast } from 'vue-sonner';
 import {
   Check,
   Copy,
-  Download,
   FolderOpen,
   Loader2,
   RefreshCw,
@@ -36,9 +35,7 @@ const open = computed({
 
 const info = ref<AiSetupInfo | null>(null);
 const loading = ref(false);
-const installing = ref(false);
 const target = ref<'codex' | 'qoder'>('codex');
-const installedSkillPath = ref('');
 
 async function load(): Promise<void> {
   loading.value = true;
@@ -61,7 +58,6 @@ async function load(): Promise<void> {
 
 watch(open, (value) => {
   if (!value) return;
-  installedSkillPath.value = '';
   target.value = 'codex';
   void load();
 });
@@ -110,17 +106,6 @@ async function copySkillPath(): Promise<void> {
   else toast.error('复制失败');
 }
 
-async function installSkill(): Promise<void> {
-  installing.value = true;
-  try {
-    installedSkillPath.value = await backend.installSkill();
-    toast.success('Skill 已安装到 Qoder 技能目录');
-  } catch (error) {
-    toast.error(error instanceof Error ? error.message : '安装 Skill 失败');
-  } finally {
-    installing.value = false;
-  }
-}
 </script>
 
 <template>
@@ -130,9 +115,7 @@ async function installSkill(): Promise<void> {
         <DialogTitle class="flex items-center gap-2 text-[15px]">
           <ShieldCheck class="size-4 text-primary" /> AI 接入
         </DialogTitle>
-        <DialogDescription class="text-meta">
-          使用安装包内的 MCP 服务，让 Codex / Qoder 把接口导入信使。不需要 Node、源码仓库或手写本机路径。
-        </DialogDescription>
+        <DialogDescription class="text-meta">让 AI 把接口导入信使。</DialogDescription>
       </DialogHeader>
 
       <div class="min-h-0 flex-1 overflow-auto px-5 py-4">
@@ -144,12 +127,12 @@ async function installSkill(): Promise<void> {
           <div class="flex items-start gap-2">
             <TriangleAlert class="mt-0.5 size-4 shrink-0 text-warning" />
             <div class="min-w-0">
-              <p class="text-[14px] font-medium">AI 接入组件不可用</p>
+              <p class="text-[14px] font-medium">AI 接入不可用</p>
               <p class="mt-1 text-meta text-muted-foreground">
-                {{ info?.message || '安装包中缺少 MCP sidecar 或 Skill 资源。' }}
+                {{ info?.message || '安装包中缺少 MCP 服务或 Skill 资源。' }}
               </p>
               <p v-if="isMockMode" class="mt-2 text-meta text-muted-foreground">
-                当前是浏览器 mock 模式，请使用桌面安装版信使打开此面板。
+                浏览器 mock 模式不含 MCP，请使用安装版信使。
               </p>
               <Button variant="outline" size="sm" class="mt-3" @click="load">
                 <RefreshCw class="size-3.5" /> 重新检测
@@ -161,14 +144,14 @@ async function installSkill(): Promise<void> {
         <template v-else>
           <div class="mb-4 flex flex-wrap items-center gap-2 rounded-md border border-success/25 bg-success/5 px-3 py-2 text-meta text-foreground">
             <Check class="size-3.5 text-success" />
-            MCP 服务与 Skill 已随安装包就位
+            MCP 与 Skill 已就位
             <span class="min-w-0 flex-1 truncate font-code text-muted-foreground">{{ info.sidecarPath }}</span>
           </div>
 
           <section class="space-y-2">
             <div class="flex items-center gap-2">
               <span class="grid size-5 place-items-center rounded-full bg-primary text-[13px] font-medium text-primary-foreground">1</span>
-              <h3 class="text-[14px] font-medium">把 MCP 配置复制到你的 AI 工具</h3>
+              <h3 class="text-[14px] font-medium">MCP 配置</h3>
             </div>
 
             <Tabs
@@ -205,29 +188,15 @@ async function installSkill(): Promise<void> {
           <section class="mt-5 space-y-2">
             <div class="flex items-center gap-2">
               <span class="grid size-5 place-items-center rounded-full bg-primary text-[13px] font-medium text-primary-foreground">2</span>
-              <h3 class="text-[14px] font-medium">安装 Skill（可选，Qoder 等支持技能目录的工具）</h3>
+              <h3 class="text-[14px] font-medium">Skill</h3>
             </div>
-            <p class="text-meta text-muted-foreground">
-              Codex 只需要 MCP 配置；支持 Skill 的工具可以安装整个技能文件夹。
-            </p>
             <div class="flex flex-wrap items-center gap-2">
-              <Button variant="outline" size="sm" :disabled="installing" @click="installSkill">
-                <Download class="size-3.5" />
-                {{ installing ? '安装中…' : '安装 Skill 到 Qoder' }}
-              </Button>
-              <Button variant="ghost" size="sm" @click="copySkillPath">
+              <Button variant="outline" size="sm" @click="copySkillPath">
                 <FolderOpen class="size-3.5" /> 复制 Skill 路径
               </Button>
               <span class="min-w-0 flex-1 truncate font-code text-meta text-muted-foreground">{{ info.skillPath }}</span>
             </div>
-            <p v-if="installedSkillPath" class="rounded-md border border-success/25 bg-success/5 px-3 py-2 text-meta text-foreground">
-              已安装到 <span class="font-code">{{ installedSkillPath }}</span>。重启 AI 工具后生效。
-            </p>
-          </section>
-
-          <section class="mt-5 rounded-md border border-border bg-muted/30 px-3 py-2.5 text-meta text-muted-foreground">
-            <p class="font-medium text-foreground">完成后</p>
-            <p class="mt-1">重启 Codex / Qoder，在任意项目里说「把这些接口导入信使」。导入后切回信使，窗口聚焦会自动刷新。</p>
+            <p class="text-meta text-muted-foreground">把整个文件夹放进 AI 工具的技能目录，重启后生效。</p>
           </section>
         </template>
       </div>

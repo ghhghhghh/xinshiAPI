@@ -422,9 +422,6 @@ export function createMockBackend(): Backend {
         message: '浏览器 mock 模式不包含 MCP sidecar；请在安装版信使中使用 AI 接入。',
       };
     },
-    async installSkill() {
-      throw new Error('浏览器 mock 模式不支持安装 Skill，请使用安装版信使。');
-    },
     sendRequest,
     async cancelRequest(requestId: string) {
       controllers.get(requestId)?.abort();

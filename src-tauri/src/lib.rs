@@ -10,8 +10,7 @@ pub fn run_mcp_stdio() -> Result<(), String> {
     mcp::run_stdio()
 }
 
-use std::fs;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 use serde::Serialize;
 use tauri::{AppHandle, Manager, State};
@@ -160,33 +159,6 @@ fn get_ai_setup_info(app: AppHandle) -> Result<AiSetupInfo, String> {
             "安装包缺少 MCP sidecar 或 Skill 资源，请重新安装应用。".to_string()
         },
     })
-}
-
-fn copy_dir_all(source: &Path, target: &Path) -> Result<(), String> {
-    fs::create_dir_all(target).map_err(|err| format!("创建目录失败：{err}"))?;
-    for entry in fs::read_dir(source).map_err(|err| format!("读取目录失败：{err}"))? {
-        let entry = entry.map_err(|err| format!("读取目录项失败：{err}"))?;
-        let path = entry.path();
-        let destination = target.join(entry.file_name());
-        if path.is_dir() {
-            copy_dir_all(&path, &destination)?;
-        } else {
-            fs::copy(&path, &destination).map_err(|err| format!("复制文件失败：{err}"))?;
-        }
-    }
-    Ok(())
-}
-
-#[tauri::command(rename_all = "camelCase")]
-fn install_skill(app: AppHandle) -> Result<String, String> {
-    let source = find_skill(&app).ok_or_else(|| "安装包中找不到 Skill 资源".to_string())?;
-    let home = home_dir().ok_or_else(|| "无法定位用户主目录".to_string())?;
-    let target = home
-        .join(".qoder")
-        .join("skills")
-        .join("xingshi-api-import");
-    copy_dir_all(&source, &target)?;
-    Ok(target.display().to_string())
 }
 
 #[tauri::command(rename_all = "camelCase")]
@@ -342,7 +314,6 @@ pub fn run() {
             set_active_environment,
             get_workspace_revision,
             get_ai_setup_info,
-            install_skill,
             send_request,
             cancel_request,
             list_history,

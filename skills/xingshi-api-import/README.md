@@ -25,7 +25,7 @@
 
 1. 设置 → **AI 接入**。
 2. 按你使用的工具复制 Codex 配置或 Qoder 配置，粘贴到 AI 工具的对应配置文件。配置里的 `command` 指向安装包内的 `xingshi-mcp.exe`，`args` 留空；它不是 npm 包，不需要 `npx`。
-3. 点「安装 Skill 到 Qoder」；如果使用其他支持技能目录的工具，复制面板里的 Skill 路径，把整个 `xingshi-api-import` 文件夹放进去。
+3. 复制面板里的 Skill 路径，把整个 `xingshi-api-import` 文件夹放进 AI 工具的技能目录。
 4. 重启 AI 工具。
 
 Skill 的安装单位是整个文件夹（包含 `SKILL.md` 和本说明），不是单个文件。
@@ -44,7 +44,7 @@ AI 会先 `list_workspace`，再构造接口树，用 `import_api_tree` 的 `dry
 
 ## 更新
 
-信使安装包更新后，重新打开「设置 → AI 接入」，重新复制 MCP 配置并按需重新安装 Skill。
+信使安装包更新后，重新打开「设置 → AI 接入」，重新复制 MCP 配置并按需重新复制 Skill。
 
 ## 边界
 
