@@ -24,6 +24,12 @@ export const useWorkspaceStore = defineStore('workspace', () => {
   const activeEnvironmentId = ref<string | null>(null);
   const loading = ref(true);
   const loadError = ref<string | null>(null);
+  /** 外部导入写的版本号；应用自身保存不改它 */
+  const revision = ref<string | null>(null);
+  /** 外部刷新期间禁止旧编辑器在卸载时回写 */
+  const reloading = ref(false);
+  /** 每次重载递增，用来强制编辑器重挂载 */
+  const reloadVersion = ref(0);
 
   const sortedCollections = computed(() =>
     [...collections.value].sort((a, b) => a.sortOrder - b.sortOrder || a.name.localeCompare(b.name)),
@@ -108,12 +114,33 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     loading.value = true;
     loadError.value = null;
     try {
-      applyWorkspace(await backend.loadWorkspace());
+      const nextRevision = await backend.getWorkspaceRevision().catch(() => revision.value);
+      const data = await backend.loadWorkspace();
+      applyWorkspace(data);
+      revision.value = nextRevision;
     } catch (error) {
       loadError.value = error instanceof Error ? error.message : String(error);
       throw error;
     } finally {
       loading.value = false;
+    }
+  }
+
+  /** 外部工具写入后重新读取工作台，保留标签页并避免旧编辑器回写 */
+  async function reload(): Promise<void> {
+    if (reloading.value) return;
+    reloading.value = true;
+    try {
+      const nextRevision = await backend.getWorkspaceRevision().catch(() => revision.value);
+      const data = await backend.loadWorkspace();
+      applyWorkspace(data);
+      revision.value = nextRevision;
+      reloadVersion.value += 1;
+    } finally {
+      // 让依赖旧对象的编辑器先完成卸载，再允许新的自动保存
+      window.setTimeout(() => {
+        reloading.value = false;
+      }, 120);
     }
   }
 
@@ -253,6 +280,9 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     activeEnvironmentId,
     loading,
     loadError,
+    revision,
+    reloading,
+    reloadVersion,
     sortedCollections,
     topLevelCollections,
     activeEnvironment,
@@ -266,6 +296,7 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     requestsOf,
     requestById,
     load,
+    reload,
     addCollection,
     updateCollection,
     removeCollection,

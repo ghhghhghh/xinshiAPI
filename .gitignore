@@ -23,3 +23,7 @@ dist-ssr
 *.sln
 *.sw?
 .workbuddy
+
+# Generated AI sidecar / resources
+src-tauri/binaries
+src-tauri/resources/skills

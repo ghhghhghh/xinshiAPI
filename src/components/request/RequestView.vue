@@ -238,7 +238,7 @@ watch(
 onBeforeUnmount(() => {
   disposed = true;
   clearSaveTimer();
-  if (!deleting && workspace.requestById(props.request.id)) {
+  if (!deleting && !workspace.reloading && workspace.requestById(props.request.id)) {
     void workspace.saveRequest(props.request);
   }
 });

@@ -8,7 +8,8 @@
     "build": "vue-tsc --noEmit && vite build",
     "preview": "vite preview",
     "tauri": "tauri",
-    "ui": "shadcn-vue add"
+    "ui": "shadcn-vue add",
+    "ai:prepare": "node scripts/prepare-ai.mjs"
   },
   "dependencies": {
     "@fontsource-variable/geist": "^5.3.0",

@@ -2,10 +2,19 @@
 
 mod db;
 mod http;
+mod mcp;
 mod models;
 mod seed;
 
-use tauri::{Manager, State};
+pub fn run_mcp_stdio() -> Result<(), String> {
+    mcp::run_stdio()
+}
+
+use std::fs;
+use std::path::{Path, PathBuf};
+
+use serde::Serialize;
+use tauri::{AppHandle, Manager, State};
 
 use db::Database;
 use http::HttpEngine;
@@ -13,6 +22,18 @@ use models::{
     ApiRequest, Collection, Environment, HistoryEntry, HttpRequestSpec, HttpResponseData,
     Workspace, now_iso,
 };
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct AiSetupInfo {
+    available: bool,
+    sidecar_path: String,
+    skill_path: String,
+    db_path: String,
+    qoder_settings_path: String,
+    codex_config_path: String,
+    message: String,
+}
 
 struct AppState {
     db: Database,
@@ -57,6 +78,115 @@ fn delete_environment(state: State<'_, AppState>, id: String) -> Result<(), Stri
 #[tauri::command(rename_all = "camelCase")]
 fn set_active_environment(state: State<'_, AppState>, id: Option<String>) -> Result<(), String> {
     state.db.set_active_environment(id.as_deref())
+}
+
+#[tauri::command(rename_all = "camelCase")]
+fn get_workspace_revision(state: State<'_, AppState>) -> Result<Option<String>, String> {
+    state.db.workspace_revision()
+}
+
+fn home_dir() -> Option<PathBuf> {
+    std::env::var("USERPROFILE")
+        .or_else(|_| std::env::var("HOME"))
+        .ok()
+        .map(PathBuf::from)
+}
+
+fn find_sidecar(app: &AppHandle) -> Option<PathBuf> {
+    let name = mcp::sidecar_file_name();
+    let mut candidates = Vec::new();
+    if let Ok(exe) = std::env::current_exe() {
+        if let Some(dir) = exe.parent() {
+            candidates.push(dir.join(name));
+            candidates.push(dir.join("resources").join(name));
+        }
+    }
+    if let Ok(dir) = app.path().resource_dir() {
+        candidates.push(dir.join(name));
+        candidates.push(dir.join("binaries").join(name));
+    }
+    candidates.into_iter().find(|path| path.is_file())
+}
+
+fn find_skill(app: &AppHandle) -> Option<PathBuf> {
+    let relative = PathBuf::from("skills").join("xingshi-api-import");
+    let mut candidates = vec![
+        PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("resources")
+            .join(&relative),
+    ];
+    if let Ok(dir) = app.path().resource_dir() {
+        candidates.push(dir.join("resources").join(&relative));
+        candidates.push(dir.join(&relative));
+    }
+    if let Ok(exe) = std::env::current_exe() {
+        if let Some(dir) = exe.parent() {
+            candidates.push(dir.join("resources").join(&relative));
+            candidates.push(dir.join(&relative));
+        }
+    }
+    candidates
+        .into_iter()
+        .find(|path| path.join("SKILL.md").is_file())
+}
+
+#[tauri::command(rename_all = "camelCase")]
+fn get_ai_setup_info(app: AppHandle) -> Result<AiSetupInfo, String> {
+    let sidecar = find_sidecar(&app);
+    let skill = find_skill(&app);
+    let home = home_dir().ok_or_else(|| "无法定位用户主目录".to_string())?;
+    let db_path = app
+        .path()
+        .app_data_dir()
+        .map_err(|err| format!("无法定位应用数据目录：{err}"))?
+        .join("messenger.db");
+    let available = sidecar.is_some() && skill.is_some();
+    Ok(AiSetupInfo {
+        available,
+        sidecar_path: sidecar
+            .as_ref()
+            .map(|path| path.display().to_string())
+            .unwrap_or_default(),
+        skill_path: skill
+            .as_ref()
+            .map(|path| path.display().to_string())
+            .unwrap_or_default(),
+        db_path: db_path.display().to_string(),
+        qoder_settings_path: home.join(".qoder").join("settings.json").display().to_string(),
+        codex_config_path: home.join(".codex").join("config.toml").display().to_string(),
+        message: if available {
+            String::new()
+        } else {
+            "安装包缺少 MCP sidecar 或 Skill 资源，请重新安装应用。".to_string()
+        },
+    })
+}
+
+fn copy_dir_all(source: &Path, target: &Path) -> Result<(), String> {
+    fs::create_dir_all(target).map_err(|err| format!("创建目录失败：{err}"))?;
+    for entry in fs::read_dir(source).map_err(|err| format!("读取目录失败：{err}"))? {
+        let entry = entry.map_err(|err| format!("读取目录项失败：{err}"))?;
+        let path = entry.path();
+        let destination = target.join(entry.file_name());
+        if path.is_dir() {
+            copy_dir_all(&path, &destination)?;
+        } else {
+            fs::copy(&path, &destination).map_err(|err| format!("复制文件失败：{err}"))?;
+        }
+    }
+    Ok(())
+}
+
+#[tauri::command(rename_all = "camelCase")]
+fn install_skill(app: AppHandle) -> Result<String, String> {
+    let source = find_skill(&app).ok_or_else(|| "安装包中找不到 Skill 资源".to_string())?;
+    let home = home_dir().ok_or_else(|| "无法定位用户主目录".to_string())?;
+    let target = home
+        .join(".qoder")
+        .join("skills")
+        .join("xingshi-api-import");
+    copy_dir_all(&source, &target)?;
+    Ok(target.display().to_string())
 }
 
 #[tauri::command(rename_all = "camelCase")]
@@ -210,6 +340,9 @@ pub fn run() {
             save_environment,
             delete_environment,
             set_active_environment,
+            get_workspace_revision,
+            get_ai_setup_info,
+            install_skill,
             send_request,
             cancel_request,
             list_history,

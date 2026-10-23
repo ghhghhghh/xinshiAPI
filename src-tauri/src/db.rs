@@ -286,6 +286,39 @@ impl Database {
         Ok(())
     }
 
+    /// 外部工具（MCP/CLI）导入后递增的版本号；应用自身保存不会改变它。
+    pub fn workspace_revision(&self) -> Result<Option<String>, String> {
+        let conn = self.connect()?;
+        let result = conn.query_row(
+            "SELECT value FROM settings WHERE key = 'external_revision'",
+            [],
+            |row| row.get::<_, String>(0),
+        );
+        match result {
+            Ok(value) if !value.trim().is_empty() => Ok(Some(value)),
+            Ok(_) => Ok(None),
+            Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
+            Err(err) => Err(format!("读取工作台版本失败：{err}")),
+        }
+    }
+
+    /// MCP sidecar 导入成功后调用，通知正在运行的桌面应用刷新。
+    pub fn bump_workspace_revision(&self) -> Result<String, String> {
+        let conn = self.connect()?;
+        let revision = format!(
+            "{}-{}",
+            chrono::Utc::now().timestamp_millis(),
+            uuid::Uuid::new_v4().simple()
+        );
+        conn.execute(
+            "INSERT INTO settings (key, value) VALUES ('external_revision', ?1)
+             ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+            params![revision],
+        )
+        .map_err(|err| format!("写入工作台版本失败：{err}"))?;
+        Ok(revision)
+    }
+
     pub fn insert_history(&self, entry: &HistoryEntry) -> Result<(), String> {
         let mut conn = self.connect()?;
         let request_json = serde_json::to_string(&entry.request)
@@ -700,6 +733,25 @@ mod tests {
         let again = temp.db.load_workspace().unwrap();
         assert_eq!(again.environments.len(), 1);
         assert!(again.collections.is_empty());
+    }
+
+    #[test]
+    fn workspace_revision_is_read_from_settings() {
+        let temp = TempDb::new();
+        assert_eq!(temp.db.workspace_revision().unwrap(), None);
+        temp.db
+            .connect()
+            .unwrap()
+            .execute(
+                "INSERT INTO settings (key, value) VALUES ('external_revision', 'rev-1')
+                 ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+                [],
+            )
+            .unwrap();
+        assert_eq!(
+            temp.db.workspace_revision().unwrap().as_deref(),
+            Some("rev-1")
+        );
     }
 
     #[test]

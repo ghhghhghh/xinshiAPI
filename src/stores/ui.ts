@@ -37,6 +37,7 @@ export const useUiStore = defineStore('ui', () => {
   const historyOpen = ref(false);
   const environmentOpen = ref(false);
   const settingsOpen = ref(false);
+  const aiSetupOpen = ref(false);
   const newRequestOpen = ref(false);
   const newRequestCollectionId = ref<string | null>(null);
   const newCollectionOpen = ref(false);
@@ -88,6 +89,7 @@ export const useUiStore = defineStore('ui', () => {
     historyOpen,
     environmentOpen,
     settingsOpen,
+    aiSetupOpen,
     newRequestOpen,
     newRequestCollectionId,
     newCollectionOpen,

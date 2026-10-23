@@ -8,6 +8,7 @@ import {
   History,
   Moon,
   Plus,
+  RefreshCw,
   SendHorizontal,
   Sun,
   X,
@@ -33,11 +34,13 @@ import { useWorkspaceStore } from '@/stores/workspace';
 import { useTabsStore } from '@/stores/tabs';
 import { useRunsStore } from '@/stores/runs';
 import { useUiStore } from '@/stores/ui';
+import { useSyncStore } from '@/stores/sync';
 
 const ui = useUiStore();
 const workspace = useWorkspaceStore();
 const tabs = useTabsStore();
 const runs = useRunsStore();
+const sync = useSyncStore();
 
 const open = computed({
   get: () => ui.commandOpen,
@@ -77,6 +80,11 @@ function openHistory(): void {
 
 function openEnvironments(): void {
   ui.environmentOpen = true;
+  open.value = false;
+}
+
+function refreshWorkspace(): void {
+  sync.manual();
   open.value = false;
 }
 
@@ -133,6 +141,9 @@ function closeAllTabs(): void {
             </CommandItem>
             <CommandItem value="环境变量 environment" @select="openEnvironments">
               <Globe2 class="size-4" /> 环境变量
+            </CommandItem>
+            <CommandItem value="刷新工作台 refresh sync reload" @select="refreshWorkspace">
+              <RefreshCw class="size-4" /> 刷新工作台
             </CommandItem>
             <CommandItem value="切换主题 theme" @select="ui.toggleTheme()">
               <Sun v-if="ui.theme === 'light'" class="size-4" />

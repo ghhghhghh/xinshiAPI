@@ -28,7 +28,7 @@ const ui = useUiStore();
 
     <RequestView
       v-else-if="tabs.activeId && workspace.requestById(tabs.activeId)"
-      :key="tabs.activeId"
+      :key="`${tabs.activeId}:${workspace.reloadVersion}`"
       :request="workspace.requestById(tabs.activeId)!"
     />
 

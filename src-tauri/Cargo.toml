@@ -4,6 +4,7 @@ version = "0.1.0"
 description = "信使 API 工作台"
 authors = ["you"]
 edition = "2024"
+default-run = "rustone"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 

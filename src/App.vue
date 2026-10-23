@@ -16,6 +16,7 @@ import CommandPalette from '@/components/overlays/CommandPalette.vue';
 import HistorySheet from '@/components/overlays/HistorySheet.vue';
 import EnvironmentSheet from '@/components/overlays/EnvironmentSheet.vue';
 import SettingsDialog from '@/components/overlays/SettingsDialog.vue';
+import AiSetupDialog from '@/components/overlays/AiSetupDialog.vue';
 import NewRequestDialog from '@/components/overlays/NewRequestDialog.vue';
 import ProjectHeadersSheet from '@/components/overlays/ProjectHeadersSheet.vue';
 import NameDialog from '@/components/common/NameDialog.vue';
@@ -23,11 +24,13 @@ import { useWorkspaceStore } from '@/stores/workspace';
 import { useTabsStore } from '@/stores/tabs';
 import { useRunsStore } from '@/stores/runs';
 import { useUiStore } from '@/stores/ui';
+import { useSyncStore } from '@/stores/sync';
 
 const workspace = useWorkspaceStore();
 const tabs = useTabsStore();
 const runs = useRunsStore();
 const ui = useUiStore();
+const sync = useSyncStore();
 
 const activeRequest = computed(() =>
   tabs.activeId ? workspace.requestById(tabs.activeId) : undefined,
@@ -132,6 +135,7 @@ onMounted(async () => {
       const firstRequest = firstOpenableRequest();
       if (firstRequest) tabs.open(firstRequest.id);
     }
+    sync.start();
   } catch {
     // 错误态由 RequestWorkspace 展示
   }
@@ -139,6 +143,7 @@ onMounted(async () => {
 
 onBeforeUnmount(() => {
   window.removeEventListener('keydown', onKeydown);
+  sync.stop();
 });
 </script>
 
@@ -177,6 +182,7 @@ onBeforeUnmount(() => {
     <EnvironmentSheet />
     <ProjectHeadersSheet />
     <SettingsDialog />
+    <AiSetupDialog />
     <NewRequestDialog
       :open="ui.newRequestOpen"
       :default-collection-id="ui.newRequestCollectionId"

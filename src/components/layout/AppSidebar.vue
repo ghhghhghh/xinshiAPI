@@ -11,9 +11,11 @@ import {
   Globe2,
   History,
   Inbox,
+  Loader2,
   MoreHorizontal,
   Pencil,
   Plus,
+  RefreshCw,
   Search,
   Settings2,
   ShieldCheck,
@@ -43,6 +45,7 @@ import ConfirmDialog from '@/components/common/ConfirmDialog.vue';
 import { useWorkspaceStore } from '@/stores/workspace';
 import { useTabsStore } from '@/stores/tabs';
 import { useUiStore } from '@/stores/ui';
+import { useSyncStore } from '@/stores/sync';
 import type { ApiRequest, Collection } from '@/lib/types';
 
 type TargetKind = 'collection' | 'request';
@@ -76,6 +79,7 @@ type Row = FolderRow | RequestRow;
 const workspace = useWorkspaceStore();
 const tabs = useTabsStore();
 const ui = useUiStore();
+const sync = useSyncStore();
 
 const search = ref('');
 const renameTarget = ref<RenameTarget | null>(null);
@@ -298,6 +302,30 @@ const deleteDescription = computed(() => {
         {{ searchMode ? '结果' : '项目 / 文件夹' }}
       </span>
       <div class="flex items-center gap-0.5">
+        <Tooltip>
+          <TooltipTrigger as-child>
+            <Button
+              variant="ghost"
+              size="icon-xs"
+              :disabled="sync.updating"
+              :aria-label="sync.updateAvailable ? '检测到外部更新，刷新工作台' : '刷新工作台'"
+              @click="sync.manual()"
+            >
+              <span class="relative inline-flex items-center justify-center">
+                <Loader2 v-if="sync.updating" class="size-4 animate-spin" />
+                <RefreshCw v-else class="size-4" />
+                <span
+                  v-if="sync.updateAvailable && !sync.updating"
+                  class="absolute -top-0.5 -right-0.5 size-1.5 rounded-full bg-primary ring-2 ring-sidebar"
+                  aria-hidden="true"
+                />
+              </span>
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>
+            {{ sync.updating ? '正在刷新…' : sync.updateAvailable ? '检测到外部导入，点击刷新' : '刷新工作台' }}
+          </TooltipContent>
+        </Tooltip>
         <Tooltip>
           <TooltipTrigger as-child>
             <Button variant="ghost" size="icon-xs" aria-label="新建项目" @click="openNewFolder(null)">

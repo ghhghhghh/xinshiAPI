@@ -17,6 +17,7 @@ import type { Backend } from './types';
 
 const WORKSPACE_KEY = 'messenger.workspace.v1';
 const HISTORY_KEY = 'messenger.history.v1';
+const REVISION_KEY = 'messenger.revision.v1';
 
 function readStorage<T>(key: string): T | null {
   try {
@@ -354,7 +355,12 @@ export function createMockBackend(): Backend {
   return {
     mode: 'mock',
     async loadWorkspace() {
-      return cloneWorkspace(ensureWorkspace());
+      // 浏览器调试时允许外部直接改 localStorage，下次刷新就能看到
+      const stored = readStorage<unknown>(WORKSPACE_KEY);
+      const parsed = stored ? workspaceSchema.safeParse(stored) : null;
+      if (parsed?.success) workspace = parsed.data;
+      else workspace = ensureWorkspace();
+      return cloneWorkspace(workspace);
     },
     async saveCollection(collection: Collection) {
       const state = ensureWorkspace();
@@ -397,6 +403,27 @@ export function createMockBackend(): Backend {
     async setActiveEnvironment(id: string | null) {
       ensureWorkspace().activeEnvironmentId = id;
       persistWorkspace();
+    },
+    async getWorkspaceRevision() {
+      try {
+        return localStorage.getItem(REVISION_KEY);
+      } catch {
+        return null;
+      }
+    },
+    async getAiSetupInfo() {
+      return {
+        available: false,
+        sidecarPath: '',
+        skillPath: '',
+        dbPath: '',
+        qoderSettingsPath: '',
+        codexConfigPath: '',
+        message: '浏览器 mock 模式不包含 MCP sidecar；请在安装版信使中使用 AI 接入。',
+      };
+    },
+    async installSkill() {
+      throw new Error('浏览器 mock 模式不支持安装 Skill，请使用安装版信使。');
     },
     sendRequest,
     async cancelRequest(requestId: string) {

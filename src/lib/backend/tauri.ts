@@ -8,7 +8,7 @@ import type {
   HttpResponseData,
   Workspace,
 } from '../types';
-import type { Backend } from './types';
+import type { AiSetupInfo, Backend } from './types';
 
 export function createTauriBackend(): Backend {
   return {
@@ -23,6 +23,9 @@ export function createTauriBackend(): Backend {
     deleteEnvironment: (id: string) => invoke<void>('delete_environment', { id }),
     setActiveEnvironment: (id: string | null) =>
       invoke<void>('set_active_environment', { id }),
+    getWorkspaceRevision: () => invoke<string | null>('get_workspace_revision'),
+    getAiSetupInfo: () => invoke<AiSetupInfo>('get_ai_setup_info'),
+    installSkill: () => invoke<string>('install_skill'),
     sendRequest: (requestId: string, spec: HttpRequestSpec) =>
       invoke<HttpResponseData>('send_request', { requestId, spec }),
     cancelRequest: (requestId: string) => invoke<void>('cancel_request', { requestId }),

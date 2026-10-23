@@ -151,6 +151,25 @@ function applyTimeout(): void {
 
         <Separator />
 
+        <section class="flex items-center justify-between gap-4">
+          <div class="min-w-0">
+            <Label>AI 接入</Label>
+            <p class="mt-0.5 text-meta text-muted-foreground">
+              让 Codex / Qoder 使用安装包自带的 MCP 服务导入接口。
+            </p>
+          </div>
+          <Button
+            variant="outline"
+            size="sm"
+            class="shrink-0"
+            @click="ui.settingsOpen = false; ui.aiSetupOpen = true"
+          >
+            配置
+          </Button>
+        </section>
+
+        <Separator />
+
         <section>
           <Label class="flex items-center gap-1.5"><Keyboard class="size-3.5" /> 快捷键</Label>
           <div class="mt-2 grid grid-cols-2 gap-x-6 gap-y-1.5 text-meta text-muted-foreground">
