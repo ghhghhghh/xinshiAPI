@@ -8,8 +8,6 @@ import {
   Folder,
   FolderOpen,
   FolderPlus,
-  Globe2,
-  History,
   Inbox,
   Loader2,
   MoreHorizontal,
@@ -149,8 +147,6 @@ const searchResults = computed(() => {
     )
     .sort((a, b) => a.name.localeCompare(b.name));
 });
-
-const activeEnvironmentName = computed(() => workspace.activeEnvironment?.name ?? '未选择环境');
 
 function openNewRequest(collectionId: string | null): void {
   ui.newRequestCollectionId = collectionId;
@@ -515,35 +511,14 @@ const deleteDescription = computed(() => {
     </ScrollArea>
 
     <div class="shrink-0 border-t border-sidebar-border/80 p-2">
-      <div class="space-y-0.5">
-        <button
-          type="button"
-          class="flex h-8 w-full items-center gap-2 rounded-md px-2.5 text-left text-[13px] transition-colors hover:bg-sidebar-accent/70"
-          @click="ui.historyOpen = true"
-        >
-          <History class="size-4 text-muted-foreground" />
-          <span>历史记录</span>
-        </button>
-        <button
-          type="button"
-          class="flex h-8 w-full items-center gap-2 rounded-md px-2.5 text-left text-[13px] transition-colors hover:bg-sidebar-accent/70"
-          @click="ui.environmentOpen = true"
-        >
-          <Globe2 class="size-4 text-muted-foreground" />
-          <span>环境</span>
-          <span class="ml-auto max-w-[110px] truncate text-meta text-muted-foreground">
-            {{ activeEnvironmentName }}
-          </span>
-        </button>
-        <button
-          type="button"
-          class="flex h-8 w-full items-center gap-2 rounded-md px-2.5 text-left text-[13px] transition-colors hover:bg-sidebar-accent/70"
-          @click="ui.settingsOpen = true"
-        >
-          <Settings2 class="size-4 text-muted-foreground" />
-          <span>设置</span>
-        </button>
-      </div>
+      <button
+        type="button"
+        class="flex h-8 w-full items-center gap-2 rounded-md px-2.5 text-left text-[13px] transition-colors hover:bg-sidebar-accent/70"
+        @click="ui.settingsOpen = true"
+      >
+        <Settings2 class="size-4 text-muted-foreground" />
+        <span>设置</span>
+      </button>
     </div>
 
     <NameDialog

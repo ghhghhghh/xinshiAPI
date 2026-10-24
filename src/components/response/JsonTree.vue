@@ -98,6 +98,14 @@ async function copyValue(value: unknown): Promise<void> {
   const ok = await copyText(text);
   if (ok) toast.success('已复制');
 }
+
+async function copyField(): Promise<void> {
+  if (props.name === null) {
+    await copyValue(props.data);
+    return;
+  }
+  await copyValue(`${JSON.stringify(props.name)}: ${JSON.stringify(props.data, null, 2)}`);
+}
 </script>
 
 <template>
@@ -220,8 +228,9 @@ async function copyValue(value: unknown): Promise<void> {
       <button
         type="button"
         class="ml-auto grid size-5 shrink-0 place-items-center rounded-sm text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100"
-        :aria-label="`复制 ${String(name ?? '值')}`"
-        @click="copyValue(props.data)"
+        :aria-label="name === null ? '复制值' : `复制键值 ${name}`"
+        :title="name === null ? '复制值' : '复制键和值'"
+        @click="copyField"
       >
         <Copy class="size-3.5" />
       </button>
