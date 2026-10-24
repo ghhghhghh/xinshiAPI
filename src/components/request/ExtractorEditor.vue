@@ -5,12 +5,28 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import ResponsePathPicker from './ResponsePathPicker.vue';
+import { collectResponsePaths } from '@/lib/response-labels';
 import { createExtractRule, type ExtractRule } from '@/lib/types';
+import { useRunsStore } from '@/stores/runs';
 import { useWorkspaceStore } from '@/stores/workspace';
+
+const props = defineProps<{ requestId: string }>();
 
 const rules = defineModel<ExtractRule[]>({ required: true });
 
 const workspace = useWorkspaceStore();
+const runs = useRunsStore();
+
+const responsePaths = computed(() => {
+  const text = runs.stateFor(props.requestId).response?.bodyText ?? '';
+  if (!text.trim()) return [];
+  try {
+    return collectResponsePaths(JSON.parse(text));
+  } catch {
+    return [];
+  }
+});
 
 /** 变量当前在环境里的值，用来判断登录到底取没取到 */
 function variableValue(name: string): string | undefined {
@@ -21,9 +37,23 @@ function variableValue(name: string): string | undefined {
 
 function variableHint(name: string): string {
   const value = variableValue(name);
-  if (value === undefined) return '未取到值';
+  if (value === undefined) return '发送后写入';
   if (!value) return '空值';
   return value.length > 28 ? `${value.slice(0, 28)}…` : value;
+}
+
+function variableStateClass(name: string): string {
+  const value = variableValue(name);
+  if (value === undefined) return 'text-muted-foreground';
+  if (!value) return 'text-warning';
+  return 'text-success';
+}
+
+function variableStateTitle(name: string): string {
+  const value = variableValue(name);
+  if (value === undefined) return '当前环境还没有这个变量；发送成功后会自动创建或更新';
+  if (!value) return '变量已存在，但值为空';
+  return value;
 }
 
 const enabledCount = computed(() => rules.value.filter((rule) => rule.enabled && rule.path.trim()).length);
@@ -65,15 +95,16 @@ function fillLoginPreset(): void {
     </div>
 
     <p class="text-meta text-muted-foreground">
-      登录接口返回 token 时，这里填 <span class="font-code">data.token</span> →
-      变量 <span class="font-code">token</span>，发送成功后会自动写回当前环境。
-      token 过期就再点一次登录，不用手改变量。
+      发送成功后自动写入当前环境，变量不需要提前创建；规则只属于当前接口。
+    </p>
+    <p v-if="!workspace.activeEnvironment" class="text-meta text-warning">
+      当前没有选择环境，发送后无法写入变量。
     </p>
 
     <div class="overflow-hidden rounded-lg border border-border bg-card">
       <div
         v-if="rules.length"
-        class="grid grid-cols-[minmax(160px,1fr)_160px_44px] items-center border-b border-border bg-muted/50 py-1.5 text-meta font-medium text-muted-foreground"
+        class="grid grid-cols-[minmax(220px,1fr)_160px_44px] items-center border-b border-border bg-muted/50 py-1.5 text-meta font-medium text-muted-foreground"
       >
         <div class="px-3">响应路径</div>
         <div class="px-2">写入变量</div>
@@ -83,14 +114,20 @@ function fillLoginPreset(): void {
       <div
         v-for="rule in rules"
         :key="rule.id"
-        class="grid grid-cols-[minmax(160px,1fr)_160px_44px] items-center border-b border-border/70 last:border-b-0 hover:bg-accent/40"
+        class="grid grid-cols-[minmax(220px,1fr)_160px_44px] items-center border-b border-border/70 last:border-b-0 hover:bg-accent/40"
       >
-        <div class="px-2 py-1.5">
+        <div class="flex items-center gap-1 px-2 py-1.5">
           <Input
             v-model="rule.path"
-            class="field-ghost h-8 rounded-md px-2 font-code text-[13px]"
+            class="field-ghost h-8 min-w-0 flex-1 rounded-md px-2 font-code text-[13px]"
             placeholder="data.token"
             :aria-label="`提取路径 ${rule.path || ''}`"
+          />
+          <ResponsePathPicker
+            :paths="responsePaths"
+            :model-value="rule.path"
+            :disabled="!responsePaths.length"
+            @update:model-value="rule.path = $event"
           />
         </div>
         <div class="px-1.5 py-1">
@@ -103,10 +140,10 @@ function fillLoginPreset(): void {
           <span
             v-if="rule.variable.trim()"
             class="mt-0.5 block truncate px-2 text-micro"
-            :class="variableValue(rule.variable) === undefined ? 'text-warning' : 'text-success'"
-            :title="variableHint(rule.variable)"
+            :class="variableStateClass(rule.variable)"
+            :title="variableStateTitle(rule.variable)"
           >
-            {{ variableValue(rule.variable) === undefined ? '未取到值' : `当前：${variableHint(rule.variable)}` }}
+            {{ variableValue(rule.variable) === undefined ? '发送后写入' : `当前：${variableHint(rule.variable)}` }}
           </span>
         </div>
         <div class="flex justify-center py-1.5">

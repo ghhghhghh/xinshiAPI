@@ -12,8 +12,9 @@ pub fn run_mcp_stdio() -> Result<(), String> {
 
 use std::path::PathBuf;
 
-use serde::Serialize;
-use tauri::{AppHandle, Manager, State};
+use serde::{Deserialize, Serialize};
+use tauri::{AppHandle, Emitter, Manager, State};
+use tauri_plugin_window_state::{AppHandleExt, StateFlags};
 
 use db::Database;
 use http::HttpEngine;
@@ -250,11 +251,114 @@ fn clear_history(state: State<'_, AppState>) -> Result<(), String> {
     state.db.clear_history()
 }
 
+#[derive(Clone, Copy, Debug, Deserialize, Serialize, PartialEq)]
+#[serde(rename_all = "lowercase")]
+enum CloseAction {
+    Tray,
+    Quit,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq)]
+struct ClosePreferences {
+    ask: bool,
+    action: CloseAction,
+}
+
+impl Default for ClosePreferences {
+    fn default() -> Self {
+        Self { ask: true, action: CloseAction::Tray }
+    }
+}
+
+fn read_close_preferences(db: &Database) -> Result<ClosePreferences, String> {
+    match db.get_setting("window_close")? {
+        Some(value) => serde_json::from_str(&value).map_err(|err| format!("读取关闭设置失败：{err}")),
+        None => Ok(ClosePreferences::default()),
+    }
+}
+
+#[tauri::command]
+fn get_close_preferences(state: State<'_, AppState>) -> Result<ClosePreferences, String> {
+    read_close_preferences(&state.db)
+}
+
+#[tauri::command]
+fn set_close_preferences(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    preferences: ClosePreferences,
+) -> Result<(), String> {
+    let value = serde_json::to_string(&preferences).map_err(|err| err.to_string())?;
+    state.db.set_setting("window_close", &value)?;
+    sync_tray_ask(&app, preferences.ask).map_err(|err| err.to_string())?;
+    app.emit_to("main", "close-preferences-changed", ())
+        .map_err(|err| err.to_string())
+}
+
+#[tauri::command]
+fn complete_window_close(app: AppHandle, action: CloseAction) -> Result<(), String> {
+    app.save_window_state(StateFlags::all() & !StateFlags::VISIBLE)
+        .map_err(|err| format!("保存窗口状态失败：{err}"))?;
+    match action {
+        CloseAction::Tray => {
+            let window = app.get_webview_window("main").ok_or("找不到主窗口")?;
+            window.hide().map_err(|err| format!("隐藏窗口失败：{err}"))?;
+        }
+        CloseAction::Quit => app.exit(0),
+    }
+    Ok(())
+}
+
+fn show_main_window(app: &AppHandle) {
+    if let Some(window) = app.get_webview_window("main") {
+        let _ = window.unminimize();
+        let _ = window.show();
+        let _ = window.set_focus();
+    }
+}
+
+fn build_tray_menu(app: &AppHandle, ask_checked: bool) -> tauri::Result<tauri::menu::Menu<tauri::Wry>> {
+    use tauri::menu::{CheckMenuItemBuilder, MenuBuilder, MenuItemBuilder};
+    MenuBuilder::new(app)
+        .item(&MenuItemBuilder::with_id("open", "打开信使").build(app)?)
+        .item(
+            &CheckMenuItemBuilder::with_id("close-ask", "关闭时询问")
+                .checked(ask_checked)
+                .build(app)?,
+        )
+        .item(&MenuItemBuilder::with_id("quit", "退出").build(app)?)
+        .build()
+}
+
+fn persist_tray_ask(app: &AppHandle) {
+    let state = app.state::<AppState>();
+    let result = (|| {
+        let mut preferences = read_close_preferences(&state.db)?;
+        preferences.ask = !preferences.ask;
+        set_close_preferences(app.clone(), state, preferences)
+    })();
+    if let Err(error) = result {
+        show_main_window(app);
+        let _ = app.emit_to("main", "close-preferences-error", error);
+        let _ = sync_tray_ask(app, read_close_preferences(&app.state::<AppState>().db)
+            .map(|preferences| preferences.ask).unwrap_or(true));
+    }
+}
+
+fn sync_tray_ask(app: &AppHandle, ask: bool) -> tauri::Result<()> {
+    if let Some(tray) = app.tray_by_id("main") {
+        tray.set_menu(Some(build_tray_menu(app, ask)?))?;
+    }
+    Ok(())
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
-        .plugin(tauri_plugin_window_state::Builder::default().build())
+        .plugin(tauri_plugin_window_state::Builder::default()
+            .with_state_flags(StateFlags::all() & !StateFlags::VISIBLE)
+            .build())
         .setup(|app| {
             let data_dir = app
                 .path()
@@ -264,6 +368,47 @@ pub fn run() {
                 Database::open(data_dir.join("messenger.db")).map_err(std::io::Error::other)?;
             let http = HttpEngine::new().map_err(std::io::Error::other)?;
             let _ = app.manage(AppState { db, http });
+
+            {
+                use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
+                let ask = read_close_preferences(&app.state::<AppState>().db)
+                    .map(|preferences| preferences.ask).unwrap_or(true);
+                let menu = build_tray_menu(app.handle(), ask)?;
+                let icon = app.default_window_icon().ok_or_else(|| std::io::Error::other("缺少应用图标"))?.clone();
+                TrayIconBuilder::with_id("main")
+                    .icon(icon)
+                    .tooltip("信使 API 工作台")
+                    .menu(&menu)
+                    .show_menu_on_left_click(false)
+                    .on_menu_event(|app, event| match event.id.as_ref() {
+                        "open" => show_main_window(app),
+                        "close-ask" => persist_tray_ask(app),
+                        "quit" => {
+                            show_main_window(app);
+                            let _ = app.emit_to("main", "quit-requested", ());
+                        }
+                        _ => {}
+                    })
+                    .on_tray_icon_event(|tray, event| {
+                        if matches!(event,
+                            TrayIconEvent::Click { button: MouseButton::Left, button_state: MouseButtonState::Up, .. }
+                            | TrayIconEvent::DoubleClick { button: MouseButton::Left, .. }
+                        ) {
+                            show_main_window(tray.app_handle());
+                        }
+                    })
+                    .build(app)?;
+            }
+
+            if let Some(window) = app.get_webview_window("main") {
+                let handle = app.handle().clone();
+                window.on_window_event(move |event| {
+                    if let tauri::WindowEvent::CloseRequested { api, .. } = event {
+                        api.prevent_close();
+                        let _ = handle.emit_to("main", "window-close-requested", ());
+                    }
+                });
+            }
 
             // 记住窗口大小：插件本身在关闭时保存，这里额外在拖动结束时存一次，
             // 免得用户直接结束进程导致下次还是默认尺寸。
@@ -319,6 +464,9 @@ pub fn run() {
             list_history,
             delete_history,
             clear_history,
+            get_close_preferences,
+            set_close_preferences,
+            complete_window_close,
         ])
         .run(tauri::generate_context!())
         .expect("启动信使失败");

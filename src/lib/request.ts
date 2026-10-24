@@ -7,7 +7,7 @@ import {
   type RequestAuth,
   type RequestBody,
 } from './types';
-import { resolveTemplate } from './variables';
+import { lookupVariable, resolveTemplate } from './variables';
 
 export interface PreparedRequest {
   spec: HttpRequestSpec | null;
@@ -48,6 +48,28 @@ function basicToken(username: string, password: string): string {
   let binary = '';
   for (const byte of bytes) binary += String.fromCharCode(byte);
   return btoa(binary);
+}
+
+/** 判断鉴权配置是否真的带了凭证；空配置不应参与继承，也不该挡住上级鉴权 */
+export function authHasCredential(auth: RequestAuth | null | undefined): boolean {
+  if (!auth) return false;
+  switch (auth.type) {
+    case 'bearer':
+      return auth.bearerToken.trim().length > 0;
+    case 'apikey':
+      return auth.keyName.trim().length > 0 && auth.keyValue.trim().length > 0;
+    case 'basic':
+      return auth.username.trim().length > 0;
+    default:
+      return false;
+  }
+}
+
+/** 请求头里的 Authorization 解析后没有凭证时，不能覆盖鉴权生成的头 */
+function isBlankAuthorization(field: ParamField): boolean {
+  if (field.name.trim().toLowerCase() !== 'authorization') return false;
+  const value = field.value.trim();
+  return value === '' || /^bearer$/i.test(value) || /^basic$/i.test(value);
 }
 
 export function mergeHeaderFields(...groups: ParamField[][]): ParamField[] {
@@ -96,14 +118,19 @@ export function prepareRequest(
     return result.value;
   };
 
+  const looseMissing = new Set<string>();
+
   /**
    * 请求头 / 鉴权里的变量缺失时不阻断发送（用空值代替），
    * 否则「token 还没登录拿到」会导致整个请求发不出去、界面毫无反应。
    */
-  const resolveLoose = (value: string): string =>
-    value.replace(/\{\{\s*([\w.-]+)\s*\}\}/g, (_match, name: string) =>
-      Object.prototype.hasOwnProperty.call(variables, name) ? variables[name] : '',
-    );
+  const resolveLoose = (value: string, missingVariables = looseMissing): string =>
+    value.replace(/\{\{\s*([\w.-]+)\s*\}\}/g, (_match, name: string) => {
+      const found = lookupVariable(variables, name);
+      if (found !== undefined) return found;
+      missingVariables.add(name);
+      return '';
+    });
 
   const resolveField = (field: ParamField): ParamField => {
     if (!field.enabled || !field.name.trim()) return field;
@@ -112,10 +139,10 @@ export function prepareRequest(
     return { ...field, value: resolve(field.value) };
   };
 
-  const resolveHeaderField = (field: ParamField): ParamField => {
+  const resolveHeaderField = (field: ParamField, missingVariables: Set<string>): ParamField => {
     if (!field.enabled || !field.name.trim()) return field;
     if (field.type === 'file') return field;
-    return { ...field, value: resolveLoose(field.value) };
+    return { ...field, value: resolveLoose(field.value, missingVariables) };
   };
 
   const resolvedParams = request.params.map(resolveField);
@@ -219,10 +246,30 @@ export function prepareRequest(
       createParam({ name: 'Authorization', value: `Basic ${basicToken(auth.username, auth.password)}` }),
     );
   }
-  // Auth 生成的头 + 请求自身头；同名时请求覆盖 Auth。
-  const resolvedHeaders = mergeHeaderFields(authHeaders, request.headers.map(resolveHeaderField));
+  const hasAuthAuthorization = authHeaders.some(
+    (field) => field.name.trim().toLowerCase() === 'authorization' && !isBlankAuthorization(field),
+  );
+  const resolvedRequestHeaders: ParamField[] = [];
+  for (const field of request.headers) {
+    const fieldMissing = new Set<string>();
+    const resolved = resolveHeaderField(field, fieldMissing);
+    const discarded = isBlankAuthorization(resolved);
+    if (!discarded) resolvedRequestHeaders.push(resolved);
+    // 被有效鉴权替代的空 Header 不参与提醒，但同名变量在其他 Header 缺失时仍要提示。
+    if (!discarded || !hasAuthAuthorization) {
+      fieldMissing.forEach((name) => looseMissing.add(name));
+    }
+  }
+  const resolvedHeaders = mergeHeaderFields(authHeaders, resolvedRequestHeaders);
 
   const warnings: string[] = [];
+  if (looseMissing.size > 0) {
+    warnings.push(
+      `请求头或鉴权里的变量在当前环境不存在：${[...looseMissing]
+        .map((name) => `{{${name}}}`)
+        .join('、')}，已按空值处理`,
+    );
+  }
   if (auth.type === 'apikey' && auth.keyName.trim() && !auth.keyValue.trim()) {
     warnings.push(`鉴权 ${auth.keyName} 的值是空的：变量还没取到值，先跑一次登录接口`);
   }

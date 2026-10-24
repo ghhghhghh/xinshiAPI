@@ -18,6 +18,12 @@ export interface AiSetupInfo {
   message: string;
 }
 
+export type CloseAction = 'tray' | 'quit';
+export interface ClosePreferences {
+  ask: boolean;
+  action: CloseAction;
+}
+
 export interface Backend {
   readonly mode: 'tauri' | 'mock';
   loadWorkspace(): Promise<Workspace>;
@@ -31,6 +37,9 @@ export interface Backend {
   /** 外部导入工具写入的版本号，用来触发工作台刷新 */
   getWorkspaceRevision(): Promise<string | null>;
   getAiSetupInfo(): Promise<AiSetupInfo>;
+  getClosePreferences(): Promise<ClosePreferences>;
+  setClosePreferences(preferences: ClosePreferences): Promise<void>;
+  completeWindowClose(action: CloseAction): Promise<void>;
   sendRequest(requestId: string, spec: HttpRequestSpec): Promise<HttpResponseData>;
   cancelRequest(requestId: string): Promise<void>;
   listHistory(limit?: number, query?: string): Promise<HistoryEntry[]>;

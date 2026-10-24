@@ -62,7 +62,8 @@ export const useSyncStore = defineStore('sync', () => {
       ui.settingsOpen ||
       ui.newRequestOpen ||
       ui.newCollectionOpen ||
-      ui.projectHeadersOpen;
+      ui.projectHeadersOpen ||
+      ui.closeConfirmOpen;
 
     if (!force && modalOpen) {
       updateAvailable.value = true;
@@ -76,6 +77,7 @@ export const useSyncStore = defineStore('sync', () => {
 
     updating.value = true;
     try {
+      await workspace.flushEnvironmentSaves();
       const active = tabs.activeId ? workspace.requestById(tabs.activeId) : undefined;
       if (active) {
         try {

@@ -45,6 +45,7 @@ export const useUiStore = defineStore('ui', () => {
   const newCollectionParentId = ref<string | null>(null);
   const projectHeadersOpen = ref(false);
   const projectHeadersCollectionId = ref<string | null>(null);
+  const closeConfirmOpen = ref(false);
 
   function applyTheme(): void {
     document.documentElement.classList.toggle('dark', theme.value === 'dark');
@@ -96,6 +97,7 @@ export const useUiStore = defineStore('ui', () => {
     newCollectionParentId,
     projectHeadersOpen,
     projectHeadersCollectionId,
+    closeConfirmOpen,
     setTheme,
     toggleTheme,
     setAccent,

@@ -1,5 +1,7 @@
 import { computed, ref, watch } from 'vue';
 import { defineStore } from 'pinia';
+import { backend } from '@/lib/backend';
+import type { CloseAction, ClosePreferences } from '@/lib/backend/types';
 
 const SETTINGS_KEY = 'messenger.settings.v1';
 
@@ -57,5 +59,30 @@ export const useSettingsStore = defineStore('settings', () => {
     { deep: true },
   );
 
-  return { timeoutMs, timeoutSeconds, followRedirects };
+  const closePreferences = ref<ClosePreferences>({ ask: true, action: 'tray' });
+  const closeBehavior = computed(() =>
+    closePreferences.value.ask ? 'ask' : closePreferences.value.action,
+  );
+
+  async function loadClosePreferences(): Promise<ClosePreferences> {
+    closePreferences.value = await backend.getClosePreferences();
+    return closePreferences.value;
+  }
+
+  async function saveClosePreferences(preferences: ClosePreferences): Promise<void> {
+    await backend.setClosePreferences(preferences);
+    closePreferences.value = { ...preferences };
+  }
+
+  async function setCloseBehavior(behavior: 'ask' | CloseAction): Promise<void> {
+    await saveClosePreferences({
+      ask: behavior === 'ask',
+      action: behavior === 'ask' ? closePreferences.value.action : behavior,
+    });
+  }
+
+  return {
+    timeoutMs, timeoutSeconds, followRedirects,
+    closeBehavior, loadClosePreferences, saveClosePreferences, setCloseBehavior,
+  };
 });

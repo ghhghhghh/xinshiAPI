@@ -25,8 +25,7 @@ import {
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import ConfirmDialog from '@/components/common/ConfirmDialog.vue';
 import EnvVariableRow from './EnvVariableRow.vue';
-import { backend } from '@/lib/backend';
-import { cloneWorkspace, createEnvVariable, type Environment } from '@/lib/types';
+import { createEnvVariable, type Environment } from '@/lib/types';
 import { useWorkspaceStore } from '@/stores/workspace';
 import { useUiStore } from '@/stores/ui';
 
@@ -53,6 +52,30 @@ const selected = computed<Environment | null>(
   () => workspace.environments.find((item) => item.id === selectedId.value) ?? null,
 );
 
+interface ExtractorSource {
+  requestName: string;
+  path: string;
+}
+
+const extractorSources = computed(() => {
+  const map = new Map<string, ExtractorSource[]>();
+  for (const request of workspace.requests) {
+    for (const rule of request.extractors ?? []) {
+      const variable = rule.variable.trim();
+      const path = rule.path.trim();
+      if (!rule.enabled || !variable || !path) continue;
+      const sources = map.get(variable) ?? [];
+      sources.push({ requestName: request.name, path });
+      map.set(variable, sources);
+    }
+  }
+  return map;
+});
+
+function sourcesFor(name: string): ExtractorSource[] {
+  return extractorSources.value.get(name.trim()) ?? [];
+}
+
 const isActive = computed(() => Boolean(selected.value && selected.value.id === workspace.activeEnvironmentId));
 
 /** 模板里不直接对可能为空的 selected 做 v-model 写入 */
@@ -73,14 +96,15 @@ watch(open, (value) => {
 
 watch(
   selected,
-  (environment) => {
-    if (!environment || deleting) return;
+  (environment, previous) => {
+    if (!environment || environment !== previous || !open.value || deleting) return;
+    workspace.queueEnvironmentSave(environment);
     if (saveTimer) window.clearTimeout(saveTimer);
     saveTimer = window.setTimeout(async () => {
       if (deleting) return;
       saving.value = true;
       try {
-        await backend.saveEnvironment(cloneWorkspace(environment));
+        await workspace.flushEnvironmentSaves();
         savedAt.value = new Date().toISOString();
       } catch (error) {
         toast.error(error instanceof Error ? error.message : '环境保存失败');
@@ -89,7 +113,7 @@ watch(
       }
     }, 500);
   },
-  { deep: true },
+  { deep: true, flush: 'sync' },
 );
 
 async function addEnvironment(): Promise<void> {
@@ -142,7 +166,7 @@ function removeVariable(id: string): void {
 
 <template>
   <Dialog v-model:open="open">
-    <DialogContent class="flex h-[86vh] max-h-[860px] flex-col gap-0 p-0 sm:max-w-[920px]">
+    <DialogContent class="flex h-[86vh] max-h-[860px] flex-col gap-0 p-0 sm:max-w-[1080px]">
       <DialogHeader class="shrink-0 space-y-1 border-b border-border/80 px-5 py-3.5 pr-12">
         <DialogTitle class="flex items-center gap-2 text-[15px]">
           <Globe2 class="size-4 text-muted-foreground" /> 环境变量
@@ -152,7 +176,7 @@ function removeVariable(id: string): void {
         </DialogDescription>
       </DialogHeader>
 
-      <div class="flex min-h-0 flex-1">
+      <div class="flex min-h-0 min-w-0 flex-1">
         <aside class="flex w-[208px] shrink-0 flex-col border-r border-border/70 bg-muted/15">
           <ScrollArea class="min-h-0 flex-1 p-2">
             <button
@@ -190,8 +214,8 @@ function removeVariable(id: string): void {
           </div>
         </aside>
 
-        <ScrollArea class="min-h-0 flex-1">
-          <div v-if="selected" class="p-5">
+        <ScrollArea class="min-h-0 min-w-0 flex-1">
+          <div v-if="selected" class="min-w-0 p-5">
             <div class="flex flex-wrap items-center gap-2">
               <Input
                 v-model="selected.name"
@@ -263,14 +287,15 @@ function removeVariable(id: string): void {
               </div>
 
               <div class="overflow-x-auto rounded-lg border border-border bg-card">
-                <div class="min-w-[560px]">
+                <div class="min-w-[820px]">
                   <div
                     v-if="selected?.variables.length"
-                    class="grid grid-cols-[38px_170px_minmax(140px,1fr)_minmax(140px,1fr)_40px] items-center border-b border-border/80 bg-muted/40 py-2 text-meta font-medium text-muted-foreground"
+                    class="grid grid-cols-[48px_150px_minmax(200px,1.4fr)_minmax(160px,1fr)_minmax(110px,0.8fr)_40px] items-center border-b border-border/80 bg-muted/40 py-2 text-meta font-medium text-muted-foreground"
                   >
-                    <div class="px-2">启用</div>
+                    <div class="whitespace-nowrap px-1">启用</div>
                     <div class="px-2">变量名</div>
                     <div class="px-2">值</div>
+                    <div class="px-2">来源</div>
                     <div class="px-2">说明</div>
                     <div />
                   </div>
@@ -288,12 +313,13 @@ function removeVariable(id: string): void {
                     v-for="envVar in selected?.variables ?? []"
                     :key="envVar.id"
                     :variable="envVar"
+                    :sources="sourcesFor(envVar.name)"
                     @remove="removeVariable"
                   />
                 </div>
               </div>
               <p class="mt-2 text-meta text-muted-foreground">
-                在请求地址、参数、请求头、Body 或鉴权中写 <span class="font-code">{{ baseUrlHint }}</span> 即可引用。
+                在请求地址、参数、请求头、Body 或鉴权中写 <span class="font-code">{{ baseUrlHint }}</span> 即可引用；“来源”是后置操作写入它的接口和路径。
               </p>
             </div>
           </div>

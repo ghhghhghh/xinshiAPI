@@ -13,6 +13,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import VariableInput from '@/components/common/VariableInput.vue';
 import EnumOptionsPopover from './EnumOptionsPopover.vue';
 import FileValueInput from './FileValueInput.vue';
 import { createParam, PARAM_TYPES, type ParamField, type ParamType } from '@/lib/types';
@@ -245,14 +246,13 @@ function addPreset(preset: (typeof headerPresets)[number]): void {
             </Select>
 
             <FileValueInput v-else-if="field.type === 'file'" :field="field" />
-            <Input
+            <VariableInput
               v-else
-              :model-value="field.value"
+              v-model="field.value"
               class="field-ghost h-8 rounded-md px-2 font-code text-[13px]"
               :inputmode="field.type === 'number' ? 'decimal' : 'text'"
               :placeholder="valuePlaceholder"
               :aria-label="`${field.name || '字段'} 的值`"
-              @update:model-value="field.value = String($event)"
             />
           </div>
 

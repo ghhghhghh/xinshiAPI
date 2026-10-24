@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, nextTick, ref, watch } from 'vue';
+import { computed, nextTick, ref } from 'vue';
 import { toast } from 'vue-sonner';
 import {
   ChevronRight,
@@ -46,6 +46,7 @@ import { useWorkspaceStore } from '@/stores/workspace';
 import { useTabsStore } from '@/stores/tabs';
 import { useUiStore } from '@/stores/ui';
 import { useSyncStore } from '@/stores/sync';
+import { authHasCredential } from '@/lib/request';
 import type { ApiRequest, Collection } from '@/lib/types';
 
 type TargetKind = 'collection' | 'request';
@@ -88,27 +89,6 @@ const expanded = ref<Set<string>>(new Set());
 
 const searchMode = computed(() => search.value.trim().length > 0);
 
-function initialExpanded(): Set<string> {
-  const set = new Set<string>();
-  const walk = (parentId: string | null, depth: number): void => {
-    if (depth > 1) return;
-    for (const folder of workspace.childCollections(parentId)) {
-      set.add(folder.id);
-      walk(folder.id, depth + 1);
-    }
-  };
-  walk(null, 0);
-  return set;
-}
-
-watch(
-  () => workspace.collections.length,
-  (length) => {
-    if (length && expanded.value.size === 0) expanded.value = initialExpanded();
-  },
-  { immediate: true },
-);
-
 function toggle(id: string): void {
   const next = new Set(expanded.value);
   if (next.has(id)) next.delete(id);
@@ -147,8 +127,9 @@ const FOLDER_AUTH_LABELS: Record<string, string> = {
   basic: 'Basic',
 };
 
-/** 只标记「自己设置了鉴权」的文件夹；继承和 none 都不算 */
+/** 只标记「真的带了凭证」的文件夹；空配置、继承和 none 都不算 */
 function folderAuthLabel(collection: Collection): string | null {
+  if (!authHasCredential(collection.auth)) return null;
   return FOLDER_AUTH_LABELS[collection.auth?.type ?? ''] ?? null;
 }
 

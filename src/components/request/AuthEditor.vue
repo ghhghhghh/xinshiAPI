@@ -1,8 +1,10 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue';
 import { Eye, EyeOff, Link2 } from '@lucide/vue';
+import VariableInput from '@/components/common/VariableInput.vue';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { authHasCredential } from '@/lib/request';
 import {
   Select,
   SelectContent,
@@ -25,23 +27,31 @@ const props = withDefaults(
 const auth = defineModel<RequestAuth>({ required: true });
 const workspace = useWorkspaceStore();
 
-const showBearer = ref(false);
 const showPassword = ref(false);
 
 const staffTokenHint = '{{staff_token}}';
 
-/** 沿文件夹链找最近的一份有效鉴权 */
+/** 沿文件夹链找最近的一份带凭证的鉴权 */
 const inheritedSource = computed(() => {
   if (!props.collectionId) return null;
   const chain = workspace.collectionChain(props.collectionId);
   for (let index = chain.length - 1; index >= 0; index -= 1) {
     const candidate = chain[index].auth;
-    if (candidate && candidate.type !== 'inherit' && candidate.type !== 'none') {
+    if (authHasCredential(candidate)) {
       return { name: chain[index].name, auth: candidate };
     }
   }
   return null;
 });
+
+/** 只写了 {{变量}} 时按明文显示，方便核对变量名；真实 token 仍默认打码 */
+function isVariableOnly(value: string): boolean {
+  return /^\s*\{\{[^{}]+\}\}\s*$/.test(value);
+}
+
+const passwordVisible = computed(
+  () => showPassword.value || isVariableOnly(auth.value.password),
+);
 
 const TYPE_LABEL: Record<AuthType, string> = {
   inherit: '继承',
@@ -128,7 +138,7 @@ function changeType(value: unknown): void {
       </div>
       <div class="grid gap-1.5">
         <Label for="apikey-value" class="text-meta">Value</Label>
-        <Input
+        <VariableInput
           id="apikey-value"
           v-model="auth.keyValue"
           class="h-9 font-code text-[13px]"
@@ -140,55 +150,51 @@ function changeType(value: unknown): void {
     <!-- Bearer -->
     <div v-else-if="auth.type === 'bearer'" class="grid max-w-[780px] gap-1.5">
       <Label for="bearer-token" class="text-meta">Token</Label>
-      <div class="relative">
-        <Input
-          id="bearer-token"
-          v-model="auth.bearerToken"
-          class="h-9 pr-10 font-code text-[13px]"
-          :type="showBearer ? 'text' : 'password'"
-          :placeholder="staffTokenHint"
-          autocomplete="off"
-        />
-        <button
-          type="button"
-          class="absolute top-1/2 right-1.5 grid size-7 -translate-y-1/2 place-items-center rounded-sm text-muted-foreground hover:bg-muted hover:text-foreground"
-          :aria-label="showBearer ? '隐藏 Token' : '显示 Token'"
-          @click="showBearer = !showBearer"
-        >
-          <EyeOff v-if="showBearer" class="size-4" />
-          <Eye v-else class="size-4" />
-        </button>
-      </div>
+      <VariableInput
+        id="bearer-token"
+        v-model="auth.bearerToken"
+        class="h-9 font-code text-[13px]"
+        type="text"
+        :placeholder="staffTokenHint"
+        autocomplete="off"
+      />
     </div>
 
     <!-- Basic -->
     <div v-else-if="auth.type === 'basic'" class="grid max-w-[780px] gap-3">
       <div class="grid gap-1.5">
         <Label for="basic-username" class="text-meta">用户名</Label>
-        <Input id="basic-username" v-model="auth.username" class="h-9 font-code text-[13px]" placeholder="用户名" autocomplete="off" />
+        <VariableInput id="basic-username" v-model="auth.username" class="h-9 font-code text-[13px]" placeholder="用户名" autocomplete="off" />
       </div>
       <div class="grid gap-1.5">
         <Label for="basic-password" class="text-meta">密码</Label>
         <div class="relative">
-          <Input
+          <VariableInput
             id="basic-password"
             v-model="auth.password"
             class="h-9 pr-10 font-code text-[13px]"
-            :type="showPassword ? 'text' : 'password'"
+            :type="passwordVisible ? 'text' : 'password'"
             placeholder="密码"
             autocomplete="off"
           />
           <button
             type="button"
             class="absolute top-1/2 right-1.5 grid size-7 -translate-y-1/2 place-items-center rounded-sm text-muted-foreground hover:bg-muted hover:text-foreground"
-            :aria-label="showPassword ? '隐藏密码' : '显示密码'"
+            :aria-label="passwordVisible ? '隐藏密码' : '显示密码'"
             @click="showPassword = !showPassword"
           >
-            <EyeOff v-if="showPassword" class="size-4" />
+            <EyeOff v-if="passwordVisible" class="size-4" />
             <Eye v-else class="size-4" />
           </button>
         </div>
       </div>
     </div>
+
+    <p
+      v-if="auth.type === 'apikey' || auth.type === 'bearer' || auth.type === 'basic'"
+      class="text-meta text-muted-foreground"
+    >
+      支持环境变量：输入 <span v-pre class="font-code">{{</span> 会列出当前环境的变量。
+    </p>
   </section>
 </template>

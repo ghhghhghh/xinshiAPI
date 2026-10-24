@@ -422,6 +422,14 @@ export function createMockBackend(): Backend {
         message: '浏览器 mock 模式不包含 MCP sidecar；请在安装版信使中使用 AI 接入。',
       };
     },
+    async getClosePreferences() {
+      const raw = localStorage.getItem('messenger.window-close.v1');
+      return raw ? JSON.parse(raw) : { ask: true, action: 'tray' };
+    },
+    async setClosePreferences(preferences) {
+      localStorage.setItem('messenger.window-close.v1', JSON.stringify(preferences));
+    },
+    async completeWindowClose() {},
     sendRequest,
     async cancelRequest(requestId: string) {
       controllers.get(requestId)?.abort();

@@ -535,7 +535,11 @@ async function removeRequest(): Promise<void> {
           </TabsContent>
 
           <TabsContent value="post" class="m-0 min-h-0 flex-1 overflow-auto p-4">
-            <ExtractorEditor v-model="props.request.extractors" />
+            <ExtractorEditor
+              :key="props.request.id"
+              v-model="props.request.extractors"
+              :request-id="props.request.id"
+            />
           </TabsContent>
         </Tabs>
       </ResizablePanel>

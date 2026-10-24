@@ -23,12 +23,21 @@ export function findVariables(template: string): string[] {
   return names;
 }
 
+/** 先按原名找，找不到再忽略大小写找一次，避免 adminToken / admintoken 这类手误 */
+export function lookupVariable(variables: Record<string, string>, name: string): string | undefined {
+  if (Object.prototype.hasOwnProperty.call(variables, name)) return variables[name];
+  const lower = name.toLowerCase();
+  for (const key of Object.keys(variables)) {
+    if (key.toLowerCase() === lower) return variables[key];
+  }
+  return undefined;
+}
+
 export function resolveTemplate(template: string, variables: Record<string, string>): ResolvedTemplate {
   const missing: string[] = [];
   const value = template.replace(/\{\{\s*([\w.-]+)\s*\}\}/g, (raw, name: string) => {
-    if (Object.prototype.hasOwnProperty.call(variables, name)) {
-      return variables[name];
-    }
+    const found = lookupVariable(variables, name);
+    if (found !== undefined) return found;
     if (!missing.includes(name)) missing.push(name);
     return raw;
   });

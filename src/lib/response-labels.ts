@@ -71,10 +71,18 @@ export function createResponseLabel(path: string, type = '', example = ''): Resp
   return { path, label: '', type, description: '', example };
 }
 
-export function labelsToMap(labels: ResponseLabel[] | undefined): Record<string, string> {
-  const map: Record<string, string> = {};
+export interface ResponseLabelInfo {
+  label: string;
+  description: string;
+}
+
+export function labelsToMap(labels: ResponseLabel[] | undefined): Record<string, ResponseLabelInfo> {
+  const map: Record<string, ResponseLabelInfo> = {};
   for (const item of labels ?? []) {
-    if (item.path.trim() && item.label.trim()) map[item.path.trim()] = item.label.trim();
+    const path = item.path.trim();
+    const label = item.label.trim();
+    const description = item.description.trim();
+    if (path && (label || description)) map[path] = { label, description };
   }
   return map;
 }

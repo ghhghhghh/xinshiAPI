@@ -319,6 +319,29 @@ impl Database {
         Ok(revision)
     }
 
+    /// 通用键值设置；托盘菜单和前端关闭确认共用同一份数据。
+    pub fn get_setting(&self, key: &str) -> Result<Option<String>, String> {
+        let conn = self.connect()?;
+        conn.query_row(
+            "SELECT value FROM settings WHERE key = ?1",
+            params![key],
+            |row| row.get::<_, String>(0),
+        )
+        .optional()
+        .map_err(|err| format!("读取设置失败：{err}"))
+    }
+
+    pub fn set_setting(&self, key: &str, value: &str) -> Result<(), String> {
+        let conn = self.connect()?;
+        conn.execute(
+            "INSERT INTO settings (key, value) VALUES (?1, ?2)
+             ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+            params![key, value],
+        )
+        .map_err(|err| format!("写入设置失败：{err}"))?;
+        Ok(())
+    }
+
     pub fn insert_history(&self, entry: &HistoryEntry) -> Result<(), String> {
         let mut conn = self.connect()?;
         let request_json = serde_json::to_string(&entry.request)
@@ -752,6 +775,29 @@ mod tests {
             temp.db.workspace_revision().unwrap().as_deref(),
             Some("rev-1")
         );
+    }
+
+    #[test]
+    fn settings_round_trip() {
+        let temp = TempDb::new();
+        assert_eq!(temp.db.get_setting("close_ask").unwrap(), None);
+        temp.db.set_setting("close_ask", "false").unwrap();
+        assert_eq!(temp.db.get_setting("close_ask").unwrap().as_deref(), Some("false"));
+        temp.db.set_setting("close_ask", "true").unwrap();
+        assert_eq!(temp.db.get_setting("close_ask").unwrap().as_deref(), Some("true"));
+    }
+
+    #[test]
+    fn close_preferences_persist_and_keep_last_action_when_asking_again() {
+        use crate::{read_close_preferences, CloseAction, ClosePreferences};
+        let temp = TempDb::new();
+        assert_eq!(read_close_preferences(&temp.db).unwrap(), ClosePreferences::default());
+        temp.db.set_setting("window_close", r#"{"ask":false,"action":"quit"}"#).unwrap();
+        assert_eq!(read_close_preferences(&temp.db).unwrap(), ClosePreferences { ask: false, action: CloseAction::Quit });
+        temp.db.set_setting("window_close", r#"{"ask":true,"action":"quit"}"#).unwrap();
+        assert_eq!(read_close_preferences(&temp.db).unwrap(), ClosePreferences { ask: true, action: CloseAction::Quit });
+        temp.db.set_setting("window_close", r#"{"ask":false,"action":"invalid"}"#).unwrap();
+        assert!(read_close_preferences(&temp.db).is_err());
     }
 
     #[test]

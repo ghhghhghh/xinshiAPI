@@ -15,6 +15,13 @@ import {
 import { Input } from '@/components/ui/input';
 import { Kbd } from '@/components/ui/kbd';
 import { Label } from '@/components/ui/label';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { Separator } from '@/components/ui/separator';
 import { Switch } from '@/components/ui/switch';
 import { isMockMode } from '@/lib/backend';
@@ -37,10 +44,43 @@ const open = computed({
 });
 
 const timeoutSeconds = ref(String(settings.timeoutSeconds));
+const closePreferencesLoading = ref(false);
+const closeBehaviorSaving = ref(false);
+const closeBehaviorDisabled = computed(
+  () => isMockMode || closePreferencesLoading.value || closeBehaviorSaving.value,
+);
 
 watch(open, (value) => {
-  if (value) timeoutSeconds.value = String(settings.timeoutSeconds);
-});
+  if (!value) return;
+  timeoutSeconds.value = String(settings.timeoutSeconds);
+  void refreshClosePreferences();
+}, { immediate: true });
+
+async function refreshClosePreferences(): Promise<void> {
+  if (isMockMode) return;
+  closePreferencesLoading.value = true;
+  try {
+    await settings.loadClosePreferences();
+  } catch (error) {
+    toast.error(error instanceof Error ? error.message : '加载关闭行为失败');
+  } finally {
+    closePreferencesLoading.value = false;
+  }
+}
+
+async function changeCloseBehavior(value: unknown): Promise<void> {
+  if (closeBehaviorDisabled.value || value === settings.closeBehavior) return;
+  if (value !== 'ask' && value !== 'tray' && value !== 'quit') return;
+  closeBehaviorSaving.value = true;
+  try {
+    await settings.setCloseBehavior(value);
+    toast.success('关闭行为已更新');
+  } catch (error) {
+    toast.error(error instanceof Error ? error.message : '保存关闭行为失败');
+  } finally {
+    closeBehaviorSaving.value = false;
+  }
+}
 
 function applyTimeout(): void {
   const value = Number(timeoutSeconds.value);
@@ -63,7 +103,7 @@ function applyTimeout(): void {
 
 <template>
   <Dialog v-model:open="open">
-    <DialogContent class="sm:max-w-[540px]" @open-auto-focus.prevent>
+    <DialogContent class="max-h-[85vh] overflow-y-auto sm:max-w-[540px]" @open-auto-focus.prevent>
       <DialogHeader>
         <DialogTitle class="flex items-center gap-2">
           <Settings2 class="size-4 text-muted-foreground" /> 设置
@@ -96,6 +136,31 @@ function applyTimeout(): void {
             <p class="mt-0.5 text-meta text-muted-foreground">关闭后，3xx 会直接作为响应返回。</p>
           </div>
           <Switch id="settings-redirects" v-model="settings.followRedirects" />
+        </section>
+
+        <Separator />
+
+        <section class="flex items-center justify-between gap-4">
+          <div class="min-w-0">
+            <Label for="settings-close-behavior">关闭行为</Label>
+            <p class="mt-0.5 text-meta text-muted-foreground">
+              {{ isMockMode ? '仅桌面版可设置关闭行为。' : '关闭窗口时生效，可随时更改。' }}
+            </p>
+          </div>
+          <Select
+            :model-value="settings.closeBehavior"
+            :disabled="closeBehaviorDisabled"
+            @update:model-value="changeCloseBehavior"
+          >
+            <SelectTrigger id="settings-close-behavior" class="w-[160px] shrink-0">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="ask">每次询问</SelectItem>
+              <SelectItem value="tray">最小化到托盘</SelectItem>
+              <SelectItem value="quit">直接退出</SelectItem>
+            </SelectContent>
+          </Select>
         </section>
 
         <Separator />

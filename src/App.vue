@@ -1,6 +1,11 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, watch } from 'vue';
 import { toast } from 'vue-sonner';
+import { listen, type UnlistenFn } from '@tauri-apps/api/event';
+import { isMockMode } from '@/lib/backend';
+import { useSettingsStore } from '@/stores/settings';
+import { useLifecycleStore } from '@/stores/lifecycle';
+import CloseConfirmDialog from '@/components/overlays/CloseConfirmDialog.vue';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { Toaster } from '@/components/ui/sonner';
 import {
@@ -31,6 +36,27 @@ const tabs = useTabsStore();
 const runs = useRunsStore();
 const ui = useUiStore();
 const sync = useSyncStore();
+const lifecycle = useLifecycleStore();
+const settings = useSettingsStore();
+const closeListeners: UnlistenFn[] = [];
+let unmounted = false;
+
+async function registerCloseListeners(): Promise<void> {
+  if (isMockMode) return;
+  const registrations: Array<Promise<UnlistenFn>> = [
+    listen('window-close-requested', () => { void lifecycle.requestClose(); }),
+    listen('quit-requested', () => { void lifecycle.finishClose('quit'); }),
+    listen('close-preferences-changed', () => {
+      void settings.loadClosePreferences().catch((error) => toast.error(String(error)));
+    }),
+    listen<string>('close-preferences-error', (event) => toast.error(event.payload)),
+  ];
+  for (const registration of registrations) {
+    const unlisten = await registration;
+    if (unmounted) unlisten();
+    else closeListeners.push(unlisten);
+  }
+}
 
 const activeRequest = computed(() =>
   tabs.activeId ? workspace.requestById(tabs.activeId) : undefined,
@@ -128,6 +154,11 @@ watch(
 onMounted(async () => {
   window.addEventListener('keydown', onKeydown);
   try {
+    await registerCloseListeners();
+  } catch (error) {
+    toast.error(`关闭窗口监听失败：${String(error)}`);
+  }
+  try {
     await workspace.load();
     tabs.prune(new Set(workspace.requests.map((request) => request.id)));
     if (!tabs.activeId && tabs.openIds.length) tabs.activate(tabs.openIds[0]);
@@ -142,6 +173,8 @@ onMounted(async () => {
 });
 
 onBeforeUnmount(() => {
+  unmounted = true;
+  closeListeners.forEach((unlisten) => unlisten());
   window.removeEventListener('keydown', onKeydown);
   sync.stop();
 });
@@ -201,6 +234,7 @@ onBeforeUnmount(() => {
       confirm-text="创建"
       @confirm="createCollection"
     />
+    <CloseConfirmDialog />
     <Toaster position="top-center" :duration="4000" :visible-toasts="3" :offset="16" />
   </TooltipProvider>
 </template>

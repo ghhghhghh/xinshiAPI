@@ -13,6 +13,7 @@ import {
   type RequestAuth,
   type Workspace,
 } from '@/lib/types';
+import { authHasCredential } from '@/lib/request';
 import { environmentToMap } from '@/lib/variables';
 
 const MAX_DEPTH = 12;
@@ -22,6 +23,8 @@ export const useWorkspaceStore = defineStore('workspace', () => {
   const requests = ref<ApiRequest[]>([]);
   const environments = ref<Environment[]>([]);
   const activeEnvironmentId = ref<string | null>(null);
+  const pendingEnvironmentEdits = new Map<string, Environment>();
+  let environmentFlush: Promise<void> | null = null;
   const loading = ref(true);
   const loadError = ref<string | null>(null);
   /** 外部导入写的版本号；应用自身保存不改它 */
@@ -71,12 +74,12 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     return collectionChain(collectionId)[0] ?? null;
   }
 
-  /** 沿文件夹链找最近的一份有效鉴权配置（继承用） */
+  /** 沿文件夹链找最近的一份带凭证的鉴权配置（继承用）；空配置继续往上找 */
   function inheritedAuthFor(collectionId: string): RequestAuth | null {
     const chain = collectionChain(collectionId);
     for (let index = chain.length - 1; index >= 0; index -= 1) {
       const auth = chain[index].auth;
-      if (auth && auth.type !== 'inherit' && auth.type !== 'none') return auth;
+      if (authHasCredential(auth)) return auth;
     }
     return null;
   }
@@ -262,7 +265,30 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     await backend.saveEnvironment(cloneWorkspace(environment));
   }
 
+  function queueEnvironmentSave(environment: Environment): void {
+    pendingEnvironmentEdits.set(environment.id, cloneWorkspace(environment));
+  }
+
+  async function flushEnvironmentSaves(): Promise<void> {
+    if (environmentFlush) await environmentFlush;
+    if (!pendingEnvironmentEdits.size) return;
+    environmentFlush = (async () => {
+      for (const [id, snapshot] of pendingEnvironmentEdits) {
+        await backend.saveEnvironment(snapshot);
+        if (pendingEnvironmentEdits.get(id) === snapshot) pendingEnvironmentEdits.delete(id);
+      }
+    })();
+    try {
+      await environmentFlush;
+    } finally {
+      environmentFlush = null;
+    }
+    if (pendingEnvironmentEdits.size) await flushEnvironmentSaves();
+  }
+
   async function removeEnvironment(id: string): Promise<void> {
+    pendingEnvironmentEdits.delete(id);
+    if (environmentFlush) await environmentFlush;
     environments.value = environments.value.filter((item) => item.id !== id);
     if (activeEnvironmentId.value === id) activeEnvironmentId.value = null;
     await backend.deleteEnvironment(id);
@@ -307,6 +333,8 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     restoreRequest,
     addEnvironment,
     saveEnvironment,
+    queueEnvironmentSave,
+    flushEnvironmentSaves,
     removeEnvironment,
     setActiveEnvironment,
   };

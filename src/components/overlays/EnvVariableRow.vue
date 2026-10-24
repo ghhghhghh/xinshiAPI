@@ -1,11 +1,19 @@
 <script setup lang="ts">
+import { computed } from 'vue';
 import { Trash2 } from '@lucide/vue';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import type { EnvVariable } from '@/lib/types';
 
-const props = defineProps<{ variable: EnvVariable }>();
+const props = defineProps<{
+  variable: EnvVariable;
+  sources: Array<{ requestName: string; path: string }>;
+}>();
+
+const sourceTitle = computed(() =>
+  props.sources.map((source) => `${source.requestName} · ${source.path}`).join('\n'),
+);
 
 const emit = defineEmits<{ remove: [id: string] }>();
 
@@ -23,7 +31,7 @@ function updateDescription(value: string): void {
 </script>
 
 <template>
-  <div class="grid grid-cols-[38px_170px_minmax(140px,1fr)_minmax(140px,1fr)_40px] items-center border-b border-border/60 last:border-b-0">
+  <div class="grid grid-cols-[48px_150px_minmax(200px,1.4fr)_minmax(160px,1fr)_minmax(110px,0.8fr)_40px] items-center border-b border-border/60 last:border-b-0">
     <div class="flex justify-center py-1.5">
       <Checkbox v-model="props.variable.enabled" :aria-label="`启用变量 ${props.variable.name || ''}`" />
     </div>
@@ -42,8 +50,25 @@ function updateDescription(value: string): void {
         class="field-ghost h-8 rounded-md px-2 font-code text-[13px]"
         placeholder="https://api.example.com"
         aria-label="变量值"
+        :title="props.variable.value"
+        spellcheck="false"
         @update:model-value="updateValue(String($event))"
       />
+    </div>
+    <div class="min-w-0 px-1.5 py-1.5">
+      <div
+        v-if="props.sources.length"
+        class="flex min-w-0 items-center gap-1 text-[12.5px] text-muted-foreground"
+        :title="sourceTitle"
+      >
+        <span class="truncate text-foreground/80">{{ props.sources[0].requestName }}</span>
+        <span class="shrink-0 text-muted-foreground/50">·</span>
+        <span class="truncate font-code">{{ props.sources[0].path }}</span>
+        <span v-if="props.sources.length > 1" class="shrink-0 text-micro">
+          +{{ props.sources.length - 1 }}
+        </span>
+      </div>
+      <span v-else class="text-meta text-muted-foreground/60">手动</span>
     </div>
     <div class="px-1.5 py-1.5">
       <Input

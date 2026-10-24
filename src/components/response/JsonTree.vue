@@ -1,8 +1,10 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue';
 import { toast } from 'vue-sonner';
-import { ChevronRight, Copy } from '@lucide/vue';
+import { ChevronRight, CircleHelp, Copy } from '@lucide/vue';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { copyText } from '@/lib/clipboard';
+import type { ResponseLabelInfo } from '@/lib/response-labels';
 
 defineOptions({ name: 'JsonTree' });
 
@@ -14,8 +16,8 @@ const props = withDefaults(
     defaultOpenDepth?: number;
     /** 父级路径，用来查中文名 */
     path?: string;
-    /** path → 中文名 */
-    labels?: Record<string, string>;
+    /** path → 中文名与说明 */
+    labels?: Record<string, ResponseLabelInfo>;
   }>(),
   {
     name: null,
@@ -33,7 +35,7 @@ const currentPath = computed(() => {
   return props.path ? `${props.path}.${props.name}` : String(props.name);
 });
 
-const fieldLabel = computed(() => props.labels?.[currentPath.value] ?? '');
+const fieldInfo = computed(() => props.labels?.[currentPath.value]);
 
 const open = ref(props.depth < props.defaultOpenDepth);
 const limit = ref(200);
@@ -111,20 +113,39 @@ async function copyValue(value: unknown): Promise<void> {
         class="mt-[3px] size-3.5 shrink-0 text-muted-foreground transition-transform"
         :class="open ? 'rotate-90' : ''"
       />
+      <Tooltip v-if="fieldInfo">
+        <TooltipTrigger as-child>
+          <span
+            class="mt-[3px] grid size-4 shrink-0 place-items-center rounded-full text-muted-foreground/70 transition-colors hover:text-foreground"
+            tabindex="0"
+            :aria-label="fieldInfo.label || fieldInfo.description"
+            @click.stop
+            @keydown.stop
+          >
+            <CircleHelp class="size-3.5" />
+          </span>
+        </TooltipTrigger>
+        <TooltipContent side="top" class="max-w-[320px]">
+          <p v-if="fieldInfo.label" class="font-medium">{{ fieldInfo.label }}</p>
+          <p
+            v-if="fieldInfo.description"
+            class="mt-0.5 text-meta text-muted-foreground"
+          >
+            {{ fieldInfo.description }}
+          </p>
+        </TooltipContent>
+      </Tooltip>
       <span
         v-if="name !== null"
-        class="break-all text-foreground/90 hover:text-primary hover:underline"
+        class="max-w-[45%] shrink-0 break-all text-foreground/90 hover:text-primary hover:underline"
         role="button"
         tabindex="0"
         :title="`点击复制键名 ${name}`"
         @click.stop="copyKey"
         @keydown.enter.stop.prevent="copyKey"
       >{{ name }}</span>
-      <span v-if="name !== null" class="text-muted-foreground">:</span>
-      <span v-if="fieldLabel" class="shrink-0 rounded-[3px] bg-muted px-1 text-meta text-foreground/80">
-        {{ fieldLabel }}
-      </span>
-      <span class="min-w-0 break-all text-muted-foreground">{{ preview }}</span>
+      <span v-if="name !== null" class="shrink-0 text-muted-foreground">:</span>
+      <span class="min-w-0 flex-1 break-all text-muted-foreground">{{ preview }}</span>
       <span class="ml-1 shrink-0 rounded-[3px] border border-border/70 bg-muted/40 px-1 text-meta leading-5 text-muted-foreground">
         {{ typeLabel }}
       </span>
@@ -156,20 +177,39 @@ async function copyValue(value: unknown): Promise<void> {
       class="group flex items-start gap-1 rounded-sm px-1 transition-colors hover:bg-muted/40"
     >
       <span class="w-3.5 shrink-0" aria-hidden="true" />
+      <Tooltip v-if="fieldInfo">
+        <TooltipTrigger as-child>
+          <span
+            class="mt-[3px] grid size-4 shrink-0 place-items-center rounded-full text-muted-foreground/70 transition-colors hover:text-foreground"
+            tabindex="0"
+            :aria-label="fieldInfo.label || fieldInfo.description"
+            @click.stop
+            @keydown.stop
+          >
+            <CircleHelp class="size-3.5" />
+          </span>
+        </TooltipTrigger>
+        <TooltipContent side="top" class="max-w-[320px]">
+          <p v-if="fieldInfo.label" class="font-medium">{{ fieldInfo.label }}</p>
+          <p
+            v-if="fieldInfo.description"
+            class="mt-0.5 text-meta text-muted-foreground"
+          >
+            {{ fieldInfo.description }}
+          </p>
+        </TooltipContent>
+      </Tooltip>
       <button
         v-if="name !== null"
         type="button"
-        class="break-all text-left text-foreground/90 hover:text-primary hover:underline"
+        class="max-w-[45%] shrink-0 break-all text-left text-foreground/90 hover:text-primary hover:underline"
         :title="`点击复制键名 ${name}`"
         @click="copyKey"
       >{{ name }}</button>
-      <span v-if="name !== null" class="text-muted-foreground">:</span>
-      <span v-if="fieldLabel" class="shrink-0 rounded-[3px] bg-muted px-1 text-meta text-foreground/80">
-        {{ fieldLabel }}
-      </span>
+      <span v-if="name !== null" class="shrink-0 text-muted-foreground">:</span>
       <button
         type="button"
-        class="min-w-0 break-all text-left"
+        class="min-w-0 flex-1 break-all text-left"
         :class="valueClass"
         :title="`点击复制 ${typeLabel} 值`"
         @click="copyValue(props.data)"
